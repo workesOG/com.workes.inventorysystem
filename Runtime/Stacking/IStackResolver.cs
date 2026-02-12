@@ -4,8 +4,6 @@ namespace com.workes.inventory.stacking
 {
     public interface IStackResolver<TKey>
     {
-        int ResolveMaxStack(
-            ItemDefinition<TKey> definition,
-            Inventory<TKey> inventory);
+        int ResolveMaxStackSize(Inventory<TKey> inventory, ItemInstance<TKey> instance);
     }
 }

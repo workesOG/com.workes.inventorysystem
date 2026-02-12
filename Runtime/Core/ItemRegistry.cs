@@ -12,6 +12,8 @@ namespace com.workes.inventory.core
             if (_definitions.ContainsKey(definition.Id))
                 throw new InvalidOperationException("Duplicate item ID.");
 
+            definition.Validate();
+
             _definitions.Add(definition.Id, definition);
         }
 

@@ -12,7 +12,7 @@ namespace com.workes.inventory.core
 
         public Inventory<TKey> CreateInventory(int capacity)
         {
-            return new Inventory<TKey>(capacity, DefaultStackResolver);
+            return new Inventory<TKey>(DefaultStackResolver, null, null);
         }
     }
 }

@@ -7,6 +7,7 @@ namespace com.workes.inventory.core
     {
         public TKey Id { get; }
 
+        public DefinitionSchema Schema { get; } = new();
         public AttributeContainer Attributes { get; } = new();
         public TagContainer Tags { get; } = new();
 
@@ -15,6 +16,11 @@ namespace com.workes.inventory.core
         public ItemDefinition(TKey id)
         {
             Id = id;
+        }
+
+        public void Validate()
+        {
+            Schema.Validate(Attributes);
         }
     }
 }

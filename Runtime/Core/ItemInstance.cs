@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace com.workes.inventory.core
 {
@@ -6,10 +7,11 @@ namespace com.workes.inventory.core
     {
         public ItemDefinition<TKey> Definition { get; }
         public int Amount { get; private set; }
-
         public Guid InstanceId { get; }
 
-        public ItemInstance(ItemDefinition<TKey> definition, int amount = 1)
+        public InstanceMetadata Metadata { get; } = new();
+
+        public ItemInstance(ItemDefinition<TKey> definition, int amount = 1, InstanceMetadata metadata = null)
         {
             if (amount <= 0)
                 throw new ArgumentException("Amount must be greater than zero.");
@@ -17,6 +19,7 @@ namespace com.workes.inventory.core
             Definition = definition;
             Amount = amount;
             InstanceId = Guid.NewGuid();
+            Metadata = metadata ?? new InstanceMetadata();
         }
 
         public void SetAmount(int amount)
@@ -38,6 +41,15 @@ namespace com.workes.inventory.core
                 throw new ArgumentException("Invalid reduction amount.");
 
             Amount -= amount;
+        }
+
+        public bool IsStackCompatible(ItemInstance<TKey> other)
+        {
+            if (!EqualityComparer<TKey>.Default.Equals(
+                    Definition.Id, other.Definition.Id))
+                return false;
+
+            return Metadata.StructuralEquals(other.Metadata);
         }
     }
 }

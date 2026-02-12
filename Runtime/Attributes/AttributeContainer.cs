@@ -33,5 +33,10 @@ namespace com.workes.inventory.attributes
         {
             return _values.ContainsKey(key);
         }
+
+        public IEnumerable<object> GetAllKeys()
+        {
+            return _values.Keys;
+        }
     }
 }

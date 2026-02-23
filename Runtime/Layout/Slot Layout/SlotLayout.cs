@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using com.workes.inventory.core;
 
@@ -112,7 +113,22 @@ namespace com.workes.inventory.layout
                 _slotMap[i] = null;
         }
 
-        public object? GetPersistentContext() => _slotMap;
+        public ILayoutPersistentData GetPersistentData()
+        {
+            return new SlotLayoutPersistentData
+            {
+                SlotMap = new List<int?>(_slotMap)
+            };
+        }
+
+        public void RestorePersistentData(ILayoutPersistentData? data)
+        {
+            if (data is not SlotLayoutPersistentData slotData)
+                throw new InvalidOperationException("Invalid layout data");
+
+            _slotMap.Clear();
+            _slotMap.AddRange(slotData.SlotMap);
+        }
     }
 
 }

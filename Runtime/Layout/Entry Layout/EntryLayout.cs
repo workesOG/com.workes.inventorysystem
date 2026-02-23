@@ -42,6 +42,8 @@ namespace com.workes.inventory.layout
 
         }
 
-        public object? GetPersistentContext() => null;
+        public ILayoutPersistentData GetPersistentData() => null;
+
+        public void RestorePersistentData(ILayoutPersistentData? data) { }
     }
 }

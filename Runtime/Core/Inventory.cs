@@ -10,6 +10,8 @@ namespace com.workes.inventory.core
 {
     public class Inventory<TKey>
     {
+        private InventoryManager<TKey> _manager;
+
         private readonly List<ItemInstance<TKey>> _items = new();
 
         private readonly IStackResolver<TKey> _stackResolver;
@@ -21,10 +23,14 @@ namespace com.workes.inventory.core
         public event Action OnChanged;
 
         public Inventory(
-            IStackResolver<TKey> stackResolver = null,
-            ICapacityPolicy<TKey> capacityPolicy = null,
-            IInventoryLayout<TKey> layout = null)
+            InventoryManager<TKey> manager,
+            IStackResolver<TKey> stackResolver,
+            ICapacityPolicy<TKey> capacityPolicy,
+            IInventoryLayout<TKey> layout)
         {
+            if (manager == null)
+                throw new ArgumentNullException("Manager cannot be null");
+            _manager = manager;
             _stackResolver = stackResolver;
             _capacityPolicy = capacityPolicy;
             _layout = layout;
@@ -273,5 +279,48 @@ namespace com.workes.inventory.core
             }
         }
 
+        public SerializedInventory<TKey> Serialize()
+        {
+            var serialized = new SerializedInventory<TKey>();
+
+            foreach (var item in _items)
+            {
+                serialized.Items.Add(new SerializedItem<TKey>
+                {
+                    DefinitionId = item.Definition.Id,
+                    Amount = item.Amount,
+                    Metadata = item.Metadata.ToDictionary()
+                });
+            }
+
+            serialized.LayoutData = _layout.GetPersistentData();
+
+            return serialized;
+        }
+
+        public void Deserialize(SerializedInventory<TKey> data)
+        {
+            if (data == null)
+                throw new ArgumentNullException("Data cannot be null");
+
+            _items.Clear();
+            _layout.OnInventoryCleared();
+
+            foreach (var serializedItem in data.Items)
+            {
+                var definition = _manager.Registry.Resolve(serializedItem.DefinitionId);
+
+                var instance = new ItemInstance<TKey>(definition, serializedItem.Amount);
+
+                if (serializedItem.Metadata != null)
+                    instance.Metadata = new InstanceMetadata(serializedItem.Metadata);
+
+                _items.Add(instance);
+            }
+
+            _layout.RestorePersistentData(data.LayoutData);
+
+            OnChanged?.Invoke();
+        }
     }
 }

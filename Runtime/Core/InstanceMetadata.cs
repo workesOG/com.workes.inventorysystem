@@ -9,6 +9,11 @@ namespace com.workes.inventory.core
         private Dictionary<string, object> Data =>
             _data ??= new Dictionary<string, object>();
 
+        public InstanceMetadata(Dictionary<string, object> data)
+        {
+            _data = data;
+        }
+
         public bool IsEmpty => _data == null || _data.Count == 0;
 
         public void Set(string key, object value)
@@ -62,6 +67,11 @@ namespace com.workes.inventory.core
             }
 
             return true;
+        }
+
+        public Dictionary<string, object> ToDictionary()
+        {
+            return new Dictionary<string, object>(Data);
         }
     }
 }

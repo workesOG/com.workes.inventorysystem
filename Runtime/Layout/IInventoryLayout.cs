@@ -19,6 +19,8 @@ namespace com.workes.inventory.layout
 
         void OnInventoryCleared(Inventory<TKey> inventory);
 
-        object? GetPersistentContext();
+        ILayoutPersistentData<TKey> GetPersistentData();
+
+        void RestorePersistentData(ILayoutPersistentData<TKey> persistentData);
     }
 }

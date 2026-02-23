@@ -1,4 +1,6 @@
 using com.workes.inventory.stacking;
+using com.workes.inventory.layout;
+using com.workes.inventory.capacity;
 
 namespace com.workes.inventory.core
 {
@@ -10,9 +12,15 @@ namespace com.workes.inventory.core
 
         public ItemRegistry<TKey> Registry => _registry;
 
-        public Inventory<TKey> CreateInventory(int capacity)
+        public Inventory<TKey> CreateInventory(
+            IInventoryLayout<TKey> layout,
+            ICapacityPolicy<TKey> capacityPolicy)
         {
-            return new Inventory<TKey>(DefaultStackResolver, null, null);
+            return new Inventory<TKey>(
+                this,
+                DefaultStackResolver,
+                capacityPolicy,
+                layout);
         }
     }
 }

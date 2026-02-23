@@ -264,7 +264,7 @@ namespace com.workes.inventory.core
         /// Replaces the entire inventory with the given entries (e.g. for load/restore).
         /// Clears current contents, then adds each entry with its optional layout context.
         /// Caller must ensure entries are valid for the current capacity and layout.
-        /// </summary>Please don
+        /// </summary>
         public void ReplaceContents(IEnumerable<(ItemDefinition<TKey> definition, int amount, ILayoutContext<TKey> context)> entries)
         {
             Clear();
@@ -304,7 +304,7 @@ namespace com.workes.inventory.core
                 throw new ArgumentNullException("Data cannot be null");
 
             _items.Clear();
-            _layout.OnInventoryCleared();
+            _layout.OnInventoryCleared(this);
 
             foreach (var serializedItem in data.Items)
             {

@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace com.workes.inventory.layout
 {
     public class SlotLayoutPersistentData : ILayoutPersistentData

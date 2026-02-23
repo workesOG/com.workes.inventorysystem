@@ -11,8 +11,6 @@ namespace com.workes.inventory.core
         public AttributeContainer Attributes { get; } = new();
         public TagContainer Tags { get; } = new();
 
-        public string Category { get; set; }
-
         public ItemDefinition(TKey id)
         {
             Id = id;

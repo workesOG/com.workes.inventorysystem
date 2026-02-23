@@ -254,5 +254,24 @@ namespace com.workes.inventory.core
             OnChanged?.Invoke();
         }
 
+        /// <summary>
+        /// Replaces the entire inventory with the given entries (e.g. for load/restore).
+        /// Clears current contents, then adds each entry with its optional layout context.
+        /// Caller must ensure entries are valid for the current capacity and layout.
+        /// </summary>Please don
+        public void ReplaceContents(IEnumerable<(ItemDefinition<TKey> definition, int amount, ILayoutContext<TKey> context)> entries)
+        {
+            Clear();
+            if (entries == null)
+                return;
+
+            foreach (var (definition, amount, context) in entries)
+            {
+                if (definition == null || amount <= 0)
+                    continue;
+                TryAdd(definition, out _, amount, context);
+            }
+        }
+
     }
 }

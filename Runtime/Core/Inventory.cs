@@ -313,7 +313,7 @@ namespace com.workes.inventory.core
                 var instance = new ItemInstance<TKey>(definition, serializedItem.Amount);
 
                 if (serializedItem.Metadata != null)
-                    instance.Metadata = new InstanceMetadata(serializedItem.Metadata);
+                    instance.Metadata.RestoreMetadata(serializedItem.Metadata);
 
                 _items.Add(instance);
             }

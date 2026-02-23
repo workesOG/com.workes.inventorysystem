@@ -11,6 +11,10 @@ namespace com.workes.inventory.layout
 
         int? GetSlotOfItem(int itemIndex);
 
+        IEnumerable<int> GetMergeCandidates(Inventory<TKey> inventory, ItemInstance<TKey> prototype, ILayoutContext<TKey>? context);
+
+        bool CanSatisfyPlacement(Inventory<TKey> inventory, ItemInstance<TKey> prototype, int requiredNewInstanceCount, ILayoutContext<TKey>? context);
+
         bool CanAcceptNewItem(Inventory<TKey> inventory, ItemInstance<TKey> instance, ILayoutContext<TKey>? context, out string? error);
 
         void OnItemAdded(Inventory<TKey> inventory, int index, ILayoutContext<TKey>? context);

@@ -45,6 +45,44 @@ namespace com.workes.inventory.layout
             return null;
         }
 
+        public IEnumerable<int> GetMergeCandidates(Inventory<TKey> inventory, ItemInstance<TKey> prototype, ILayoutContext<TKey>? context)
+        {
+            if (context is SlotLayoutContext<TKey> slotContext)
+            {
+                int slot = slotContext.SlotIndex;
+                if (slot < 0 || slot >= _slotMap.Count)
+                    yield break;
+                var itemIndex = _slotMap[slot];
+                if (itemIndex.HasValue)
+                    yield return itemIndex.Value;
+                yield break;
+            }
+
+            for (int slot = 0; slot < _slotMap.Count; slot++)
+            {
+                var itemIndex = _slotMap[slot];
+                if (itemIndex.HasValue)
+                    yield return itemIndex.Value;
+            }
+        }
+
+        public bool CanSatisfyPlacement(Inventory<TKey> inventory, ItemInstance<TKey> prototype, int requiredNewInstanceCount, ILayoutContext<TKey>? context)
+        {
+            if (requiredNewInstanceCount <= 0)
+                return true;
+
+            if (context is SlotLayoutContext<TKey> slotContext)
+                return requiredNewInstanceCount <= 1;
+
+            int emptySlots = 0;
+            for (int i = 0; i < _slotMap.Count; i++)
+            {
+                if (!_slotMap[i].HasValue)
+                    emptySlots++;
+            }
+            return requiredNewInstanceCount <= emptySlots;
+        }
+
         public bool CanAcceptNewItem(Inventory<TKey> inventory, ItemInstance<TKey> instance, ILayoutContext<TKey>? context, out string? error)
         {
             error = null;

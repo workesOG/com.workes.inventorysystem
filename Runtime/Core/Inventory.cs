@@ -78,11 +78,17 @@ namespace com.workes.inventory.core
                 ? _stackResolver.ResolveMaxStackSize(this, prototype)
                 : 1;
 
+            // Phase 1: Simulate merge (read-only), record what we would add per index
             int remaining = amount;
+            var mergeDeltas = new List<(int index, int add)>();
 
-            // Fill existing stack-compatible slots first (no-op when maxStack == 1)
-            for (int i = 0; i < _items.Count && remaining > 0; i++)
+            foreach (int i in _layout.GetMergeCandidates(this, prototype, context))
             {
+                if (remaining <= 0)
+                    break;
+                if (i < 0 || i >= _items.Count)
+                    continue;
+
                 var existing = _items[i];
                 if (!existing.IsStackCompatible(prototype))
                     continue;
@@ -92,11 +98,24 @@ namespace com.workes.inventory.core
                     continue;
 
                 int add = Math.Min(remaining, room);
-                existing.AddAmount(add);
+                mergeDeltas.Add((i, add));
                 remaining -= add;
             }
 
-            bool anyChange = remaining < amount;
+            int requiredNewInstanceCount = remaining > 0 ? (remaining + maxStack - 1) / maxStack : 0;
+
+            if (requiredNewInstanceCount > 0 && !_layout.CanSatisfyPlacement(this, prototype, requiredNewInstanceCount, context))
+            {
+                error = "Layout cannot satisfy placement (e.g. amount requires more instances than the given slot context allows).";
+                return false;
+            }
+
+            // Phase 2: Apply merge
+            foreach (var (index, add) in mergeDeltas)
+                _items[index].AddAmount(add);
+
+            bool anyChange = mergeDeltas.Count > 0;
+
             if (remaining <= 0)
             {
                 if (anyChange)
@@ -104,7 +123,7 @@ namespace com.workes.inventory.core
                 return true;
             }
 
-            // Add new instance(s) for the remainder
+            // Phase 3: Add new instance(s) for the remainder; rollback merge on failure
             while (remaining > 0)
             {
                 int chunk = Math.Min(remaining, maxStack);
@@ -112,15 +131,13 @@ namespace com.workes.inventory.core
 
                 if (!_capacityPolicy.CanAdd(this, instance, out error))
                 {
-                    if (anyChange)
-                        OnChanged?.Invoke();
+                    RollbackMerge(mergeDeltas);
                     return false;
                 }
 
                 if (!_layout.CanAcceptNewItem(this, instance, context, out error))
                 {
-                    if (anyChange)
-                        OnChanged?.Invoke();
+                    RollbackMerge(mergeDeltas);
                     return false;
                 }
 
@@ -131,6 +148,15 @@ namespace com.workes.inventory.core
 
             OnChanged?.Invoke();
             return true;
+        }
+
+        private void RollbackMerge(List<(int index, int add)> mergeDeltas)
+        {
+            for (int j = mergeDeltas.Count - 1; j >= 0; j--)
+            {
+                var (index, add) = mergeDeltas[j];
+                _items[index].ReduceAmount(add);
+            }
         }
 
         public bool TryRemove(ItemInstance<TKey> instance, out string? error, int amount = 1)
@@ -318,7 +344,7 @@ namespace com.workes.inventory.core
                 _items.Add(instance);
             }
 
-            _layout.RestorePersistentData(data.LayoutData);
+            _layout.RestorePersistentData(data.LayoutData as ILayoutPersistentData);
 
             OnChanged?.Invoke();
         }

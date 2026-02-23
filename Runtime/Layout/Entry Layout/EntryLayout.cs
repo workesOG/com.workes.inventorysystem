@@ -21,6 +21,17 @@ namespace com.workes.inventory.layout
             return index;
         }
 
+        public IEnumerable<int> GetMergeCandidates(Inventory<TKey> inventory, ItemInstance<TKey> prototype, ILayoutContext<TKey>? context)
+        {
+            for (int i = 0; i < inventory.Items.Count; i++)
+                yield return i;
+        }
+
+        public bool CanSatisfyPlacement(Inventory<TKey> inventory, ItemInstance<TKey> prototype, int requiredNewInstanceCount, ILayoutContext<TKey>? context)
+        {
+            return requiredNewInstanceCount >= 0;
+        }
+
         public bool CanAcceptNewItem(Inventory<TKey> inventory, ItemInstance<TKey> instance, ILayoutContext<TKey>? context, out string? error)
         {
             error = null;

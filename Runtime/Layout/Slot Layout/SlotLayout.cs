@@ -66,13 +66,63 @@ namespace com.workes.inventory.layout
             }
         }
 
-        public bool CanSatisfyPlacement(Inventory<TKey> inventory, ItemInstance<TKey> prototype, int requiredNewInstanceCount, ILayoutContext<TKey>? context)
+        public bool CanSatisfyPlacement(Inventory<TKey> inventory, InventoryTransaction<TKey> transaction, ILayoutContext<TKey>? context, out string? error)
         {
-            if (requiredNewInstanceCount <= 0)
-                return true;
+            error = null;
+            int newInstanceCount = transaction.Added.Count;
+            int mergeDeltaCount = transaction.AmountDeltas.Count;
 
             if (context is SlotLayoutContext<TKey> slotContext)
-                return requiredNewInstanceCount <= 1;
+            {
+                int slot = slotContext.SlotIndex;
+                if (slot < 0 || slot >= _slotMap.Count)
+                {
+                    error = "Slot index out of range.";
+                    return false;
+                }
+
+                if (newInstanceCount > 0 && mergeDeltaCount > 0)
+                {
+                    error = "With slot context cannot have both merge (delta) and new instance; only one action on the slot is allowed.";
+                    return false;
+                }
+
+                if (newInstanceCount > 1 || mergeDeltaCount > 1)
+                {
+                    error = "With slot context only one new instance or merge delta can be placed.";
+                    return false;
+                }
+
+                if (newInstanceCount == 1)
+                {
+                    if (_slotMap[slot].HasValue)
+                    {
+                        error = "Slot already occupied.";
+                        return false;
+                    }
+                    return true;
+                }
+
+                if (mergeDeltaCount == 1)
+                {
+                    if (!_slotMap[slot].HasValue)
+                    {
+                        error = "Merge delta targets a slot that has no item.";
+                        return false;
+                    }
+                    int itemIndexInSlot = _slotMap[slot].Value;
+                    if (transaction.AmountDeltas[0].index != itemIndexInSlot)
+                    {
+                        error = "Merge delta index does not match the item in the slot specified by context.";
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            if (newInstanceCount <= 0)
+                return true;
 
             int emptySlots = 0;
             for (int i = 0; i < _slotMap.Count; i++)
@@ -80,7 +130,32 @@ namespace com.workes.inventory.layout
                 if (!_slotMap[i].HasValue)
                     emptySlots++;
             }
-            return requiredNewInstanceCount <= emptySlots;
+
+            if (newInstanceCount > emptySlots)
+            {
+                error = "Not enough empty slots for new instances.";
+                return false;
+            }
+
+            foreach (var (_, itemContext) in transaction.Added)
+            {
+                if (itemContext is SlotLayoutContext<TKey> itemSlotContext)
+                {
+                    int slot = itemSlotContext.SlotIndex;
+                    if (slot < 0 || slot >= _slotMap.Count)
+                    {
+                        error = "Slot index out of range.";
+                        return false;
+                    }
+                    if (_slotMap[slot].HasValue)
+                    {
+                        error = "Slot already occupied.";
+                        return false;
+                    }
+                }
+            }
+
+            return true;
         }
 
         public bool CanAcceptNewItem(Inventory<TKey> inventory, ItemInstance<TKey> instance, ILayoutContext<TKey>? context, out string? error)

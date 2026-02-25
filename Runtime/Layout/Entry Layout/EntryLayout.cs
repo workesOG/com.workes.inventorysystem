@@ -27,9 +27,10 @@ namespace com.workes.inventory.layout
                 yield return i;
         }
 
-        public bool CanSatisfyPlacement(Inventory<TKey> inventory, ItemInstance<TKey> prototype, int requiredNewInstanceCount, ILayoutContext<TKey>? context)
+        public bool CanSatisfyPlacement(Inventory<TKey> inventory, InventoryTransaction<TKey> transaction, ILayoutContext<TKey>? context, out string? error)
         {
-            return requiredNewInstanceCount >= 0;
+            error = null;
+            return true;
         }
 
         public bool CanAcceptNewItem(Inventory<TKey> inventory, ItemInstance<TKey> instance, ILayoutContext<TKey>? context, out string? error)

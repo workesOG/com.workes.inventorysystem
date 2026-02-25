@@ -63,207 +63,244 @@ namespace com.workes.inventory.core
             _layout.OnItemAdded(this, _items.Count - 1, context);
         }
 
-        public bool TryAdd(ItemDefinition<TKey> definition, out string? error, int amount = 1, ILayoutContext<TKey>? context = null)
+        /// <summary>Builds a semantic (normalized) view of the transaction for capacity evaluation. Groups by definition and metadata (structural equality) so e.g. 90 apples and 10 apples[metadata] are distinct.</summary>
+        public NormalizedInventoryTransaction<TKey> GenerateNormalizedInventoryTransaction(InventoryTransaction<TKey> transaction)
         {
-            error = null;
+            if (transaction == null)
+                throw new ArgumentNullException(nameof(transaction));
+            if (transaction.Inventory != this)
+                throw new InvalidOperationException("Transaction does not belong to this inventory.");
 
+            var addedList = new List<(ItemDefinition<TKey> definition, InstanceMetadata? metadata, int amount)>();
+            var removedList = new List<(ItemDefinition<TKey> definition, InstanceMetadata? metadata, int amount)>();
+
+            void MergeInto(List<(ItemDefinition<TKey> definition, InstanceMetadata? metadata, int amount)> list, ItemDefinition<TKey> def, InstanceMetadata? meta, int amt)
+            {
+                for (int i = 0; i < list.Count; i++)
+                {
+                    var (d, m, a) = list[i];
+                    if (!EqualityComparer<TKey>.Default.Equals(d.Id, def.Id))
+                        continue;
+                    bool metaMatch = (m == null || m.IsEmpty) && (meta == null || meta.IsEmpty)
+                        || (m != null && meta != null && m.StructuralEquals(meta));
+                    if (!metaMatch)
+                        continue;
+                    list[i] = (d, m, a + amt);
+                    return;
+                }
+                list.Add((def, meta, amt));
+            }
+
+            foreach (var (index, delta) in transaction.AmountDeltas)
+            {
+                var inst = _items[index];
+                var def = inst.Definition;
+                var meta = inst.Metadata.IsEmpty ? null : inst.Metadata;
+                if (delta > 0)
+                    MergeInto(addedList, def, meta, delta);
+                else
+                    MergeInto(removedList, def, meta, -delta);
+            }
+
+            foreach (var (_, instance) in transaction.Removed)
+            {
+                var meta = instance.Metadata.IsEmpty ? null : instance.Metadata;
+                MergeInto(removedList, instance.Definition, meta, instance.Amount);
+            }
+
+            foreach (var (instance, _) in transaction.Added)
+            {
+                var meta = instance.Metadata.IsEmpty ? null : instance.Metadata;
+                MergeInto(addedList, instance.Definition, meta, instance.Amount);
+            }
+
+            return new NormalizedInventoryTransaction<TKey>(addedList, removedList);
+        }
+
+        /// <summary>Internal: generates a transaction for adding items. Optional metadata groups by definition+metadata (e.g. 10 apples vs 10 apples[metadata]).</summary>
+        internal bool TryFormulateAdd(ItemDefinition<TKey> definition, int amount, ILayoutContext<TKey>? context, InstanceMetadata? metadata, out InventoryTransaction<TKey>? transaction, out string? error)
+        {
+            transaction = null;
+            error = null;
             if (amount <= 0)
             {
                 error = "Amount must be greater than zero.";
                 return false;
             }
 
-            var prototype = new ItemInstance<TKey>(definition, 1);
+            var prototypeMeta = metadata != null && !metadata.IsEmpty ? CloneMetadata(metadata) : null;
+            var prototype = new ItemInstance<TKey>(definition, 1, prototypeMeta);
             int maxStack = _stackResolver != null
                 ? _stackResolver.ResolveMaxStackSize(this, prototype)
                 : 1;
 
-            // Phase 1: Simulate merge (read-only), record what we would add per index
+            var amountDeltas = new List<(int index, int delta)>();
+            var added = new List<(ItemInstance<TKey> instance, ILayoutContext<TKey>? context)>();
             int remaining = amount;
-            var mergeDeltas = new List<(int index, int add)>();
 
             foreach (int i in _layout.GetMergeCandidates(this, prototype, context))
             {
-                if (remaining <= 0)
-                    break;
-                if (i < 0 || i >= _items.Count)
-                    continue;
-
+                if (remaining <= 0) break;
+                if (i < 0 || i >= _items.Count) continue;
                 var existing = _items[i];
-                if (!existing.IsStackCompatible(prototype))
-                    continue;
-
+                if (!existing.IsStackCompatible(prototype)) continue;
                 int room = maxStack - existing.Amount;
-                if (room <= 0)
-                    continue;
-
+                if (room <= 0) continue;
                 int add = Math.Min(remaining, room);
-                mergeDeltas.Add((i, add));
+                amountDeltas.Add((i, add));
                 remaining -= add;
             }
 
-            int requiredNewInstanceCount = remaining > 0 ? (remaining + maxStack - 1) / maxStack : 0;
-
-            if (requiredNewInstanceCount > 0 && !_layout.CanSatisfyPlacement(this, prototype, requiredNewInstanceCount, context))
-            {
-                error = "Layout cannot satisfy placement (e.g. amount requires more instances than the given slot context allows).";
-                return false;
-            }
-
-            // Phase 2: Apply merge
-            foreach (var (index, add) in mergeDeltas)
-                _items[index].AddAmount(add);
-
-            bool anyChange = mergeDeltas.Count > 0;
-
-            if (remaining <= 0)
-            {
-                if (anyChange)
-                    OnChanged?.Invoke();
-                return true;
-            }
-
-            // Phase 3: Add new instance(s) for the remainder; rollback merge on failure
             while (remaining > 0)
             {
                 int chunk = Math.Min(remaining, maxStack);
-                var instance = new ItemInstance<TKey>(definition, chunk);
-
-                if (!_capacityPolicy.CanAdd(this, instance, out error))
-                {
-                    RollbackMerge(mergeDeltas);
-                    return false;
-                }
-
+                var chunkMeta = metadata != null && !metadata.IsEmpty ? CloneMetadata(metadata) : null;
+                var instance = new ItemInstance<TKey>(definition, chunk, chunkMeta);
                 if (!_layout.CanAcceptNewItem(this, instance, context, out error))
-                {
-                    RollbackMerge(mergeDeltas);
                     return false;
-                }
-
-                AddItem(instance, context);
+                added.Add((instance, context));
                 remaining -= chunk;
-                anyChange = true;
             }
 
-            OnChanged?.Invoke();
+            var tx = new InventoryTransaction<TKey>(this, amountDeltas, new List<(int index, ItemInstance<TKey> instance)>(), added);
+            if (!ValidateTransactionWithCapacityAndLayout(tx, context, out error))
+                return false;
+            transaction = tx;
             return true;
         }
 
-        private void RollbackMerge(List<(int index, int add)> mergeDeltas)
+        private static InstanceMetadata CloneMetadata(InstanceMetadata source)
         {
-            for (int j = mergeDeltas.Count - 1; j >= 0; j--)
-            {
-                var (index, add) = mergeDeltas[j];
-                _items[index].ReduceAmount(add);
-            }
+            var clone = new InstanceMetadata();
+            if (source != null && !source.IsEmpty)
+                clone.RestoreMetadata(new Dictionary<string, object>(source.ToDictionary()));
+            return clone;
         }
 
-        public bool TryRemove(ItemInstance<TKey> instance, out string? error, int amount = 1)
-        {
-            error = null;
+        internal bool TryFormulateAdd(ItemDefinition<TKey> definition, int amount, ILayoutContext<TKey>? context, out InventoryTransaction<TKey>? transaction, out string? error)
+            => TryFormulateAdd(definition, amount, context, null, out transaction, out error);
 
+        /// <summary>Internal: generates a transaction for removing from a specific instance.</summary>
+        internal bool TryFormulateRemove(ItemInstance<TKey> instance, int amount, out InventoryTransaction<TKey>? transaction, out string? error)
+        {
+            transaction = null;
+            error = null;
             if (amount <= 0)
             {
                 error = "Amount must be greater than zero.";
                 return false;
             }
-
             int index = _items.IndexOf(instance);
             if (index == -1)
             {
                 error = "Item not found in inventory.";
                 return false;
             }
-
             if (instance.Amount < amount)
             {
                 error = "Not enough quantity to remove.";
                 return false;
             }
-
+            var amountDeltas = new List<(int index, int delta)>();
+            var removed = new List<(int index, ItemInstance<TKey> instance)>();
             if (instance.Amount == amount)
-                RemoveAt(index);
+                removed.Add((index, instance));
             else
-                instance.ReduceAmount(amount);
-
-            OnChanged?.Invoke();
+                amountDeltas.Add((index, -amount));
+            var tx = new InventoryTransaction<TKey>(this, amountDeltas, removed, new List<(ItemInstance<TKey> instance, ILayoutContext<TKey>? context)>());
+            if (!ValidateTransactionWithCapacityAndLayout(tx, null, out error))
+                return false;
+            transaction = tx;
             return true;
         }
 
-        public bool TryRemoveAtStorageIndex(int index, out string? error, int amount = 1)
+        /// <summary>Internal: generates a transaction for removing at a storage index.</summary>
+        internal bool TryFormulateRemoveAt(int index, int amount, out InventoryTransaction<TKey>? transaction, out string? error)
         {
+            transaction = null;
             error = null;
-
             if (index < 0 || index >= _items.Count)
             {
                 error = "Index out of range.";
                 return false;
             }
-
-            var instance = _items[index];
-
+            var inst = _items[index];
             if (amount <= 0)
             {
                 error = "Amount must be greater than zero.";
                 return false;
             }
-
-            if (instance.Amount < amount)
+            if (inst.Amount < amount)
             {
                 error = "Not enough quantity to remove.";
                 return false;
             }
-
-            if (instance.Amount == amount)
-                RemoveAt(index);
+            var amountDeltas = new List<(int index, int delta)>();
+            var removed = new List<(int index, ItemInstance<TKey> instance)>();
+            if (inst.Amount == amount)
+                removed.Add((index, inst));
             else
-                instance.ReduceAmount(amount);
-
-            OnChanged?.Invoke();
+                amountDeltas.Add((index, -amount));
+            var tx = new InventoryTransaction<TKey>(this, amountDeltas, removed, new List<(ItemInstance<TKey> instance, ILayoutContext<TKey>? context)>());
+            if (!ValidateTransactionWithCapacityAndLayout(tx, null, out error))
+                return false;
+            transaction = tx;
             return true;
         }
 
-        public bool TryRemoveByDefinition(ItemDefinition<TKey> definition, int amount, bool ignoreMetadata, out string? error)
+        /// <summary>Internal: generates a transaction for removing by definition. When ignoreMetadata is false, uses first matching instance's metadata as reference.</summary>
+        internal bool TryFormulateRemoveByDefinition(ItemDefinition<TKey> definition, int amount, bool ignoreMetadata, out InventoryTransaction<TKey>? transaction, out string? error)
         {
+            if (ignoreMetadata)
+                return TryFormulateRemoveByDefinition(definition, amount, (InstanceMetadata?)null, out transaction, out error);
+            transaction = null;
             error = null;
+            if (definition == null) { error = "Definition cannot be null."; return false; }
+            if (amount <= 0) { error = "Amount must be greater than zero."; return false; }
+            InstanceMetadata? firstMeta = null;
+            for (int i = 0; i < _items.Count; i++)
+            {
+                var inst = _items[i];
+                if (!EqualityComparer<TKey>.Default.Equals(inst.Definition.Id, definition.Id)) continue;
+                firstMeta = inst.Metadata;
+                break;
+            }
+            return TryFormulateRemoveByDefinition(definition, amount, firstMeta, out transaction, out error);
+        }
 
+        /// <summary>Internal: when referenceMetadata is null/empty, any metadata matches; otherwise only instances with structurally equal metadata match.</summary>
+        internal bool TryFormulateRemoveByDefinition(ItemDefinition<TKey> definition, int amount, InstanceMetadata? referenceMetadata, out InventoryTransaction<TKey>? transaction, out string? error)
+        {
+            transaction = null;
+            error = null;
             if (definition == null)
             {
                 error = "Definition cannot be null.";
                 return false;
             }
-
             if (amount <= 0)
             {
                 error = "Amount must be greater than zero.";
                 return false;
             }
-
+            var amountDeltas = new List<(int index, int delta)>();
+            var removed = new List<(int index, ItemInstance<TKey> instance)>();
             int remaining = amount;
-            InstanceMetadata? referenceMetadata = null;
+            bool matchMetadata = referenceMetadata != null && !referenceMetadata.IsEmpty;
 
             for (int i = 0; i < _items.Count && remaining > 0; i++)
             {
-                var instance = _items[i];
-                if (!EqualityComparer<TKey>.Default.Equals(instance.Definition.Id, definition.Id))
+                var inst = _items[i];
+                if (!EqualityComparer<TKey>.Default.Equals(inst.Definition.Id, definition.Id))
                     continue;
-
-                if (!ignoreMetadata)
-                {
-                    if (referenceMetadata == null)
-                        referenceMetadata = instance.Metadata;
-                    else if (!instance.Metadata.StructuralEquals(referenceMetadata))
-                        continue;
-                }
-
-                int take = Math.Min(remaining, instance.Amount);
+                if (matchMetadata && !inst.Metadata.StructuralEquals(referenceMetadata!))
+                    continue;
+                int take = Math.Min(remaining, inst.Amount);
                 remaining -= take;
-
-                if (instance.Amount == take)
-                    RemoveAt(i--);
+                if (inst.Amount == take)
+                    removed.Add((i, inst));
                 else
-                    instance.ReduceAmount(take);
+                    amountDeltas.Add((i, -take));
             }
 
             if (remaining > 0)
@@ -272,7 +309,147 @@ namespace com.workes.inventory.core
                 return false;
             }
 
+            var tx = new InventoryTransaction<TKey>(this, amountDeltas, removed, new List<(ItemInstance<TKey> instance, ILayoutContext<TKey>? context)>());
+            if (!ValidateTransactionWithCapacityAndLayout(tx, null, out error))
+                return false;
+            transaction = tx;
+            return true;
+        }
+
+        private bool ValidateTransactionWithCapacityAndLayout(InventoryTransaction<TKey> tx, ILayoutContext<TKey>? context, out string? error)
+        {
+            error = null;
+            var normalized = GenerateNormalizedInventoryTransaction(tx);
+            if (!_capacityPolicy.CanApply(this, normalized, out error))
+                return false;
+            if (!_layout.CanSatisfyPlacement(this, tx, context, out error))
+                return false;
+            return true;
+        }
+
+        /// <summary>Converts a normalized (semantic) transaction into an inventory-specific structural transaction. Public for custom policies and cross-inventory use. Supports single add and/or single remove; multiple definitions may require multiple calls.</summary>
+        public bool TryFormulateFromNormalized(NormalizedInventoryTransaction<TKey> normalized, out InventoryTransaction<TKey>? transaction, out string? error)
+        {
+            transaction = null;
+            error = null;
+            if (normalized == null)
+            {
+                error = "Normalized transaction cannot be null.";
+                return false;
+            }
+            if (normalized.IsEmpty)
+            {
+                error = "Normalized transaction is empty.";
+                return false;
+            }
+
+            if (normalized.Removed.Count == 0 && normalized.Added.Count == 1)
+            {
+                var (def, meta, amount) = normalized.Added[0];
+                return TryFormulateAdd(def, amount, null, meta, out transaction, out error);
+            }
+            if (normalized.Added.Count == 0 && normalized.Removed.Count == 1)
+            {
+                var (def, meta, amount) = normalized.Removed[0];
+                return TryFormulateRemoveByDefinition(def, amount, meta, out transaction, out error);
+            }
+            if (normalized.Added.Count == 0 && normalized.Removed.Count > 1)
+            {
+                error = "Normalized transaction with multiple removed definitions is not yet supported for conversion; use a single removed definition.";
+                return false;
+            }
+
+            error = "Normalized transaction with multiple added definitions is not yet supported for conversion; use single-definition adds or remove-only.";
+            return false;
+        }
+
+        /// <summary>Merges two structural transactions so that applying the result is equivalent to applying first then second. Second was formulated against the state after first.</summary>
+        internal static InventoryTransaction<TKey> MergeTransactions(InventoryTransaction<TKey> first, InventoryTransaction<TKey> second)
+        {
+            if (first.Inventory != second.Inventory)
+                throw new InvalidOperationException("Cannot merge transactions for different inventories.");
+            int n = first.Inventory.Items.Count;
+            var firstRemovedIndices = new HashSet<int>();
+            foreach (var (idx, _) in first.Removed)
+                firstRemovedIndices.Add(idx);
+            int removedCount = first.Removed.Count;
+            var afterFirstIndexToOriginal = new List<int>();
+            for (int i = 0; i < n; i++)
+                if (!firstRemovedIndices.Contains(i))
+                    afterFirstIndexToOriginal.Add(i);
+
+            var mergedDeltas = new List<(int index, int delta)>(first.AmountDeltas);
+            foreach (var (afterIndex, delta) in second.AmountDeltas)
+            {
+                if (afterIndex < afterFirstIndexToOriginal.Count)
+                    mergedDeltas.Add((afterFirstIndexToOriginal[afterIndex], delta));
+            }
+            var mergedRemoved = new List<(int index, ItemInstance<TKey> instance)>(first.Removed);
+            foreach (var (afterIndex, instance) in second.Removed)
+            {
+                if (afterIndex < afterFirstIndexToOriginal.Count)
+                    mergedRemoved.Add((afterFirstIndexToOriginal[afterIndex], instance));
+            }
+            var mergedAdded = new List<(ItemInstance<TKey> instance, ILayoutContext<TKey>? context)>(first.Added);
+            mergedAdded.AddRange(second.Added);
+
+            return new InventoryTransaction<TKey>(first.Inventory, mergedDeltas, mergedRemoved, mergedAdded);
+        }
+
+        /// <summary>Internal: executes a transaction (single- or future cross-inventory). Transaction must reference this inventory and must not already be applied.</summary>
+        internal void CommitTransaction(InventoryTransaction<TKey> transaction)
+        {
+            if (transaction == null)
+                throw new ArgumentNullException(nameof(transaction));
+            if (transaction.Inventory != this)
+                throw new InvalidOperationException("Transaction does not belong to this inventory.");
+            if (transaction.IsApplied)
+                throw new InvalidOperationException("Transaction has already been applied.");
+
+            foreach (var (index, delta) in transaction.AmountDeltas)
+                _items[index].AddAmount(delta);
+
+            var removed = new List<(int index, ItemInstance<TKey> instance)>(transaction.Removed);
+            removed.Sort((a, b) => b.index.CompareTo(a.index));
+            foreach (var (index, _) in removed)
+                RemoveAt(index);
+
+            foreach (var (instance, context) in transaction.Added)
+                AddItem(instance, context);
+
+            transaction.MarkApplied();
             OnChanged?.Invoke();
+        }
+
+        public bool TryAdd(ItemDefinition<TKey> definition, out string? error, int amount = 1, ILayoutContext<TKey>? context = null)
+        {
+            if (!TryFormulateAdd(definition, amount, context, out var tx, out error) || tx == null)
+                return false;
+            CommitTransaction(tx);
+            return true;
+        }
+
+        public bool TryRemove(ItemInstance<TKey> instance, out string? error, int amount = 1)
+        {
+            if (!TryFormulateRemove(instance, amount, out var tx, out error) || tx == null)
+                return false;
+            CommitTransaction(tx);
+            return true;
+        }
+
+        public bool TryRemoveAtStorageIndex(int index, out string? error, int amount = 1)
+        {
+            if (!TryFormulateRemoveAt(index, amount, out var tx, out error) || tx == null)
+                return false;
+            CommitTransaction(tx);
+            return true;
+        }
+
+        public bool TryRemoveByDefinition(ItemDefinition<TKey> definition, int amount, bool ignoreMetadata, out string? error)
+        {
+            if (!TryFormulateRemoveByDefinition(definition, amount, ignoreMetadata, out var tx, out error) || tx == null)
+                return false;
+            CommitTransaction(tx);
             return true;
         }
 

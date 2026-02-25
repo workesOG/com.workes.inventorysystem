@@ -11,9 +11,11 @@ namespace com.workes.inventory.core
         public AttributeContainer Attributes { get; } = new();
         public TagContainer Tags { get; } = new();
 
-        public ItemDefinition(TKey id)
+        public ItemDefinition(TKey id, AttributeContainer attributes = null, TagContainer tags = null)
         {
             Id = id;
+            Attributes = attributes ?? new AttributeContainer();
+            Tags = tags ?? new TagContainer();
         }
 
         public void Validate()

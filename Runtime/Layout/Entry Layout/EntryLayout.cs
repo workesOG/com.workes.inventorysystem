@@ -4,58 +4,211 @@ using com.workes.inventory.core;
 
 namespace com.workes.inventory.layout
 {
+    /// <summary>
+    /// Entry-based layout that treats the underlying inventory items as an unordered bag.
+    /// Structure (ordering) is tracked via an internal index mapping and never by mutating
+    /// the inventory's <c>_items</c> list.
+    /// </summary>
     public class EntryLayout<TKey> : IInventoryLayout<TKey>
     {
-        public int GetSlotCount(Inventory<TKey> inventory) => inventory.Items.Count;
+        private readonly List<int> _order = new();
+
+        public int GetSlotCount(Inventory<TKey> inventory)
+        {
+            return _order.Count;
+        }
 
         public ItemInstance<TKey>? GetAt(Inventory<TKey> inventory, int index)
         {
-            if (index < 0 || index >= inventory.Items.Count)
+            if (index < 0 || index >= _order.Count)
                 return null;
 
-            return inventory.Items[index];
+            int itemIndex = _order[index];
+            if (itemIndex < 0 || itemIndex >= inventory.Items.Count)
+                return null;
+
+            return inventory.Items[itemIndex];
         }
 
         public int? GetSlotOfItem(int index)
         {
-            return index;
+            for (int i = 0; i < _order.Count; i++)
+            {
+                if (_order[i] == index)
+                    return i;
+            }
+
+            return null;
         }
 
         public IEnumerable<int> GetMergeCandidates(Inventory<TKey> inventory, ItemInstance<TKey> prototype, ILayoutContext<TKey>? context)
         {
-            for (int i = 0; i < inventory.Items.Count; i++)
-                yield return i;
+            // If we have an entry layout context, the only valid merge candidate is the
+            // item currently stored at that structural position.
+            if (context is EntryLayoutContext<TKey> entryContext)
+            {
+                int targetPos = entryContext.TargetIndex;
+                if (targetPos < 0 || targetPos >= _order.Count)
+                    yield break;
+
+                int itemIndex = _order[targetPos];
+                if (itemIndex < 0 || itemIndex >= inventory.Items.Count)
+                    yield break;
+
+                yield return itemIndex;
+                yield break;
+            }
+
+            // No specific context: all items in the current structural order are candidates.
+            for (int i = 0; i < _order.Count; i++)
+                yield return _order[i];
         }
 
         public bool CanSatisfyPlacement(Inventory<TKey> inventory, InventoryTransaction<TKey> transaction, ILayoutContext<TKey>? context, out string? error)
         {
             error = null;
+            int newInstanceCount = transaction.Added.Count;
+            int mergeDeltaCount = transaction.AmountDeltas.Count;
+
+            // Entry layout has no fixed capacity; without context we always allow placement.
+            if (context is not EntryLayoutContext<TKey> entryContext)
+                return true;
+
+            // With entry context we conceptually operate on a single structural index,
+            // so only a single structural change (one add or one merge delta) is allowed.
+            if (newInstanceCount + mergeDeltaCount > 1)
+            {
+                if (newInstanceCount == 0 && mergeDeltaCount == 0)
+                {
+                    error = "The inventory transaction contains no structural changes.";
+                    return false;
+                }
+                error = "With entry layout context only one structural change is allowed.";
+                return false;
+            }
+
+            // If this is a merge-only change, ensure the delta targets the item currently
+            // at the specified entry position.
+            if (mergeDeltaCount == 1)
+            {
+                int targetPos = entryContext.TargetIndex;
+                if (targetPos < 0 || targetPos >= _order.Count)
+                {
+                    error = "Target index out of range.";
+                    return false;
+                }
+
+                int itemIndex = _order[targetPos];
+                var (index, _) = transaction.AmountDeltas[0];
+                if (index != itemIndex)
+                {
+                    error = "Merge delta does not match the item at the specified entry index.";
+                    return false;
+                }
+            }
+
+            // For add-only with context, there is no structural capacity limit: the entry
+            // list can always grow; placement details are handled in OnItemAdded.
             return true;
         }
 
         public bool CanAcceptNewItem(Inventory<TKey> inventory, ItemInstance<TKey> instance, ILayoutContext<TKey>? context, out string? error)
         {
             error = null;
+            // Entry layout has no capacity limit, but if a context is provided we validate
+            // that the requested target index is sensible for this layout.
+            if (context is EntryLayoutContext<TKey> entryContext)
+            {
+                int targetPos = entryContext.TargetIndex;
+                if (targetPos < 0 || targetPos > _order.Count)
+                {
+                    error = "Target index out of range.";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        public bool TryMove(Inventory<TKey> inventory, int storageIndex, ILayoutContext<TKey>? context, out object fromPosition, out object toPosition, out string? error)
+        {
+            error = null;
+            fromPosition = null;
+            toPosition = null;
+
+            int fromPos = _order.IndexOf(storageIndex);
+            if (fromPos < 0)
+            {
+                error = "Item not found in layout.";
+                return false;
+            }
+
+            fromPosition = fromPos;
+
+            if (context is not EntryLayoutContext<TKey> entryContext)
+            {
+                // No valid target context: treat as a no-op move.
+                toPosition = fromPos;
+                return true;
+            }
+
+            int targetPos = entryContext.TargetIndex;
+            if (targetPos < 0 || targetPos >= _order.Count)
+            {
+                error = "Target index out of range.";
+                return false;
+            }
+
+            toPosition = targetPos;
+
+            if (targetPos == fromPos)
+                return true;
+
+            int itemIndex = _order[fromPos];
+            _order.RemoveAt(fromPos);
+            if (targetPos > fromPos)
+                targetPos--;
+            _order.Insert(targetPos, itemIndex);
+
             return true;
         }
 
         public void OnItemAdded(Inventory<TKey> inventory, int index, ILayoutContext<TKey>? context)
         {
-
+            // New items are appended structurally at the end.
+            _order.Add(index);
         }
 
         public void OnItemRemoved(Inventory<TKey> inventory, int index)
         {
-
+            for (int i = 0; i < _order.Count; i++)
+            {
+                if (_order[i] == index)
+                {
+                    _order.RemoveAt(i);
+                    i--;
+                }
+                else if (_order[i] > index)
+                {
+                    _order[i]--;
+                }
+            }
         }
 
         public void OnInventoryCleared(Inventory<TKey> inventory)
         {
-
+            _order.Clear();
         }
 
-        public ILayoutPersistentData GetPersistentData() => null;
+        public ILayoutPersistentData GetPersistentData() => new EntryLayoutPersistentData { Order = _order };
 
-        public void RestorePersistentData(ILayoutPersistentData? data) { }
+        public void RestorePersistentData(ILayoutPersistentData? data)
+        {
+            if (data is not EntryLayoutPersistentData entryData)
+                throw new InvalidOperationException("Invalid layout data");
+
+            _order.Clear();
+            _order.AddRange(entryData.Order);
+        }
     }
 }

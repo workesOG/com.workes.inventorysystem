@@ -139,6 +139,7 @@ namespace com.workes.inventory.layout
 
             foreach (var (_, itemContext) in transaction.Added)
             {
+
                 if (itemContext is SlotLayoutContext<TKey> itemSlotContext)
                 {
                     int slot = itemSlotContext.SlotIndex;
@@ -199,6 +200,47 @@ namespace com.workes.inventory.layout
                     return i;
             }
             return -1;
+        }
+
+        public bool TryMove(Inventory<TKey> inventory, int storageIndex, ILayoutContext<TKey>? context, out object fromPosition, out object toPosition, out string? error)
+        {
+            error = null;
+            fromPosition = null;
+            toPosition = null;
+
+            if (context is not SlotLayoutContext<TKey> slotContext)
+            {
+                error = "Invalid context type.";
+                return false;
+            }
+
+            int fromSlot;
+            if (!_slotMap[storageIndex].HasValue)
+            {
+                error = "Item not found in storage index.";
+                return false;
+            }
+            fromSlot = _slotMap[storageIndex].Value;
+            fromPosition = fromSlot;
+
+            int toSlot = slotContext.SlotIndex;
+            toPosition = toSlot;
+            if (toSlot < 0 || toSlot >= _slotMap.Count)
+            {
+                error = "Slot index out of range.";
+                return false;
+            }
+
+            if (_slotMap[toSlot].HasValue)
+            {
+                error = "Slot already occupied.";
+                return false;
+            }
+
+            _slotMap[toSlot] = storageIndex;
+            _slotMap[fromSlot] = null;
+
+            return true;
         }
 
         public void OnItemAdded(Inventory<TKey> inventory, int index, ILayoutContext<TKey>? context)

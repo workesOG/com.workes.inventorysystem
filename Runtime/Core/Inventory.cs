@@ -5,6 +5,8 @@ using com.workes.inventory.attributes;
 using com.workes.inventory.layout;
 using com.workes.inventory.stacking;
 using com.workes.inventory.capacity;
+using com.workes.inventory.events;
+using com.workes.inventory.events.dto;
 
 namespace com.workes.inventory.core
 {
@@ -20,7 +22,7 @@ namespace com.workes.inventory.core
 
         public AttributeContainer Attributes { get; } = new();
 
-        public event Action OnChanged;
+        public event EventHandler<InventoryChangedEventArgs<TKey>> Changed;
 
         public Inventory(
             InventoryManager<TKey> manager,
@@ -39,6 +41,8 @@ namespace com.workes.inventory.core
         public IReadOnlyList<ItemInstance<TKey>> Items => _items;
         public int InstanceCount => _items.Count;
         public int TotalItemCount => _items.Sum(i => i.Amount);
+
+        public IInventoryLayout<TKey> Layout => _layout;
 
         private void RemoveAt(int index)
         {
@@ -406,19 +410,30 @@ namespace com.workes.inventory.core
             if (transaction.IsApplied)
                 throw new InvalidOperationException("Transaction has already been applied.");
 
+            var changedEventArgs = new InventoryChangedEventArgs<TKey>();
+
             foreach (var (index, delta) in transaction.AmountDeltas)
+            {
                 _items[index].AddAmount(delta);
+                changedEventArgs.Added.Add(new ItemAdded<TKey>(_items[index], index));
+            }
 
             var removed = new List<(int index, ItemInstance<TKey> instance)>(transaction.Removed);
             removed.Sort((a, b) => b.index.CompareTo(a.index));
             foreach (var (index, _) in removed)
+            {
                 RemoveAt(index);
+                changedEventArgs.Removed.Add(new ItemRemoved<TKey>(_items[index], index));
+            }
 
             foreach (var (instance, context) in transaction.Added)
+            {
                 AddItem(instance, context);
+                changedEventArgs.Added.Add(new ItemAdded<TKey>(instance, _items.Count - 1));
+            }
 
             transaction.MarkApplied();
-            OnChanged?.Invoke();
+            Changed?.Invoke(this, changedEventArgs);
         }
 
         public bool TryAdd(ItemDefinition<TKey> definition, out string? error, int amount = 1, ILayoutContext<TKey>? context = null)
@@ -453,6 +468,33 @@ namespace com.workes.inventory.core
             return true;
         }
 
+        public bool TryMove(int storageIndex, ILayoutContext<TKey>? context, out string? error)
+        {
+            error = null;
+
+            if (storageIndex < 0 || storageIndex >= _items.Count)
+            {
+                error = "Storage index out of range.";
+                return false;
+            }
+
+            var item = _items[storageIndex];
+
+            if (!_layout.TryMove(this, storageIndex, context, out var fromPosition, out var toPosition, out error))
+                return false;
+
+            var changedEventArgs = new InventoryChangedEventArgs<TKey>(
+                moved: new List<ItemMoved<TKey>>
+                {
+                    new ItemMoved<TKey>(item, fromPosition, toPosition)
+                }
+            );
+
+            Changed?.Invoke(this, changedEventArgs);
+
+            return true;
+        }
+
         public void Clear()
         {
             if (_items.Count == 0)
@@ -460,7 +502,7 @@ namespace com.workes.inventory.core
 
             _items.Clear();
             _layout.OnInventoryCleared(this);
-            OnChanged?.Invoke();
+            Changed?.Invoke(this, new InventoryChangedEventArgs<TKey>(cleared: true));
         }
 
         /// <summary>
@@ -506,8 +548,7 @@ namespace com.workes.inventory.core
             if (data == null)
                 throw new ArgumentNullException("Data cannot be null");
 
-            _items.Clear();
-            _layout.OnInventoryCleared(this);
+            Clear();
 
             foreach (var serializedItem in data.Items)
             {
@@ -518,12 +559,10 @@ namespace com.workes.inventory.core
                 if (serializedItem.Metadata != null)
                     instance.Metadata.RestoreMetadata(serializedItem.Metadata);
 
-                _items.Add(instance);
+                TryAdd(definition, out _, serializedItem.Amount, null);
             }
 
             _layout.RestorePersistentData(data.LayoutData as ILayoutPersistentData);
-
-            OnChanged?.Invoke();
         }
     }
 }

@@ -13,10 +13,11 @@ namespace com.workes.inventory.layout
 
         IEnumerable<int> GetMergeCandidates(Inventory<TKey> inventory, ItemInstance<TKey> prototype, ILayoutContext<TKey>? context);
 
-        /// <summary>Evaluates whether the layout can satisfy the full transaction (structure: merge deltas, added instances, removals). Context is the placement context for the operation (e.g. specific slot); null means no constraint. Consulted alongside capacity before committing.</summary>
         bool CanSatisfyPlacement(Inventory<TKey> inventory, InventoryTransaction<TKey> transaction, ILayoutContext<TKey>? context, out string? error);
 
         bool CanAcceptNewItem(Inventory<TKey> inventory, ItemInstance<TKey> instance, ILayoutContext<TKey>? context, out string? error);
+
+        bool TryMove(Inventory<TKey> inventory, int storageIndex, ILayoutContext<TKey>? context, out object fromPosition, out object toPosition , out string? error);
 
         void OnItemAdded(Inventory<TKey> inventory, int index, ILayoutContext<TKey>? context);
 

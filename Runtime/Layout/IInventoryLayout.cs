@@ -28,5 +28,8 @@ namespace com.workes.inventory.layout
         ILayoutPersistentData GetPersistentData();
 
         void RestorePersistentData(ILayoutPersistentData persistentData);
+
+        /// <summary>Returns a new layout instance with the same state. Used for simulation cloning.</summary>
+        IInventoryLayout<TKey> Clone();
     }
 }

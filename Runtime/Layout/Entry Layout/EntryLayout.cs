@@ -210,5 +210,13 @@ namespace com.workes.inventory.layout
             _order.Clear();
             _order.AddRange(entryData.Order);
         }
+
+        public IInventoryLayout<TKey> Clone()
+        {
+            var data = (EntryLayoutPersistentData)GetPersistentData();
+            var clone = new EntryLayout<TKey>();
+            clone.RestorePersistentData(new EntryLayoutPersistentData { Order = new List<int>(data.Order) });
+            return clone;
+        }
     }
 }

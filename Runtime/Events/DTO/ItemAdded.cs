@@ -4,12 +4,12 @@ namespace com.workes.inventory.events.dto
 {
     public class ItemAdded<TKey>
     {
-        public ItemInstance<TKey> Item { get; set; }
-        public int Index { get; set; }
+        public ItemInstance<TKey> Instance { get; }
+        public int Index { get; }
 
-        public ItemAdded(ItemInstance<TKey> item, int index)
+        public ItemAdded(ItemInstance<TKey> instance, int index)
         {
-            Item = item;
+            Instance = instance;
             Index = index;
         }
     }

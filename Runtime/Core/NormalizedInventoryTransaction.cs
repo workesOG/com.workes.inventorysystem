@@ -1,33 +1,22 @@
-using System;
 using System.Collections.Generic;
 
 namespace com.workes.inventory.core
 {
     /// <summary>
-    /// Semantic representation of inventory change: which items (by definition and metadata) were added and removed.
-    /// Same definition with different metadata is distinct (e.g. 90 apples and 10 apples[metadata]).
-    /// Used by capacity policies to evaluate an entire transaction.
+    /// Semantic (definition+metadata grouped) view of a transaction for capacity evaluation.
     /// </summary>
     public class NormalizedInventoryTransaction<TKey>
     {
-        private readonly IReadOnlyList<(ItemDefinition<TKey> definition, InstanceMetadata? metadata, int amount)> _added;
-        private readonly IReadOnlyList<(ItemDefinition<TKey> definition, InstanceMetadata? metadata, int amount)> _removed;
+        public IReadOnlyList<(ItemDefinition<TKey> definition, InstanceMetadata? metadata, int amount)> Added { get; }
+        public IReadOnlyList<(ItemDefinition<TKey> definition, InstanceMetadata? metadata, int amount)> Removed { get; }
+        public bool IsEmpty => Added.Count == 0 && Removed.Count == 0;
 
-        internal NormalizedInventoryTransaction(
-            IReadOnlyList<(ItemDefinition<TKey> definition, InstanceMetadata? metadata, int amount)> added,
-            IReadOnlyList<(ItemDefinition<TKey> definition, InstanceMetadata? metadata, int amount)> removed)
+        public NormalizedInventoryTransaction(
+            List<(ItemDefinition<TKey> definition, InstanceMetadata? metadata, int amount)> added,
+            List<(ItemDefinition<TKey> definition, InstanceMetadata? metadata, int amount)> removed)
         {
-            _added = added ?? Array.Empty<(ItemDefinition<TKey>, InstanceMetadata?, int)>();
-            _removed = removed ?? Array.Empty<(ItemDefinition<TKey>, InstanceMetadata?, int)>();
+            Added = added ?? new List<(ItemDefinition<TKey>, InstanceMetadata?, int)>();
+            Removed = removed ?? new List<(ItemDefinition<TKey>, InstanceMetadata?, int)>();
         }
-
-        /// <summary>Items to add: (definition, metadata, total amount) per definition+metadata group.</summary>
-        public IReadOnlyList<(ItemDefinition<TKey> definition, InstanceMetadata? metadata, int amount)> Added => _added;
-
-        /// <summary>Items to remove: (definition, metadata, total amount) per definition+metadata group.</summary>
-        public IReadOnlyList<(ItemDefinition<TKey> definition, InstanceMetadata? metadata, int amount)> Removed => _removed;
-
-        /// <summary>Whether this normalized transaction has no net change.</summary>
-        public bool IsEmpty => _added.Count == 0 && _removed.Count == 0;
     }
 }

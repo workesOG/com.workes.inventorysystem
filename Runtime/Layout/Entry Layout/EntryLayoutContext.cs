@@ -3,8 +3,7 @@ using com.workes.inventory.core;
 namespace com.workes.inventory.layout
 {
     /// <summary>
-    /// Layout context for entry-based layouts, representing a target position
-    /// in the structural ordering for move operations.
+    /// Layout context for entry-based placement at a specific structural index.
     /// </summary>
     public class EntryLayoutContext<TKey> : ILayoutContext<TKey>
     {
@@ -16,4 +15,3 @@ namespace com.workes.inventory.layout
         }
     }
 }
-

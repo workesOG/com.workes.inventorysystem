@@ -284,6 +284,11 @@ namespace com.workes.inventory.layout
             _slotMap.Clear();
             _slotMap.AddRange(slotData.SlotMap);
         }
-    }
 
+        public IInventoryLayout<TKey> Clone()
+        {
+            var data = (SlotLayoutPersistentData)GetPersistentData();
+            return new SlotLayout<TKey>(new List<int?>(data.SlotMap));
+        }
+    }
 }

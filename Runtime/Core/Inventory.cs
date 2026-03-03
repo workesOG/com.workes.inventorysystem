@@ -67,6 +67,69 @@ namespace com.workes.inventory.core
             _layout.OnItemAdded(this, _items.Count - 1, context);
         }
 
+        /// <summary>Internal: adds an item and notifies layout without firing Changed. Used for simulation seeding.</summary>
+        internal void AddItemSilent(ItemInstance<TKey> instance, ILayoutContext<TKey>? context)
+        {
+            _items.Add(instance);
+            _layout.OnItemAdded(this, _items.Count - 1, context);
+        }
+
+        /// <summary>Internal: applies a transaction without firing Changed. Used for simulation state updates.</summary>
+        internal void ApplyTransactionSilent(InventoryTransaction<TKey> transaction)
+        {
+            if (transaction == null)
+                throw new ArgumentNullException(nameof(transaction));
+            if (transaction.Inventory != this)
+                throw new InvalidOperationException("Transaction does not belong to this inventory.");
+            if (transaction.IsApplied)
+                throw new InvalidOperationException("Transaction has already been applied.");
+
+            foreach (var (index, delta) in transaction.AmountDeltas)
+                _items[index].AddAmount(delta);
+
+            var removed = new List<(int index, ItemInstance<TKey> instance)>(transaction.Removed);
+            removed.Sort((a, b) => b.index.CompareTo(a.index));
+            foreach (var (index, _) in removed)
+            {
+                _items.RemoveAt(index);
+                _layout.OnItemRemoved(this, index);
+            }
+
+            foreach (var (instance, context) in transaction.Added)
+            {
+                _items.Add(instance);
+                _layout.OnItemAdded(this, _items.Count - 1, context);
+            }
+
+            transaction.MarkApplied();
+        }
+
+        /// <summary>Internal: creates a simulation clone of this inventory for bulk transaction building.</summary>
+        internal static Inventory<TKey> CreateSimulationClone(Inventory<TKey> source)
+        {
+            var clonedLayout = source._layout.Clone();
+            var clone = new Inventory<TKey>(source._manager, source._stackResolver, source._capacityPolicy, clonedLayout);
+
+            foreach (var item in source._items)
+            {
+                var meta = item.Metadata.IsEmpty ? null : CloneMetadata(item.Metadata);
+                var clonedInstance = new ItemInstance<TKey>(item.Definition, item.Amount, meta);
+                clone.AddItemSilent(clonedInstance, null);
+            }
+
+            return clone;
+        }
+
+        /// <summary>
+        /// Creates a transaction builder seeded with the current inventory state.
+        /// Use for bulk operations that should produce a single Changed event on commit.
+        /// </summary>
+        public InventoryTransactionBuilder<TKey> CreateTransactionBuilder()
+        {
+            var simulation = CreateSimulationClone(this);
+            return new InventoryTransactionBuilder<TKey>(this, simulation);
+        }
+
         /// <summary>Builds a semantic (normalized) view of the transaction for capacity evaluation. Groups by definition and metadata (structural equality) so e.g. 90 apples and 10 apples[metadata] are distinct.</summary>
         public NormalizedInventoryTransaction<TKey> GenerateNormalizedInventoryTransaction(InventoryTransaction<TKey> transaction)
         {
@@ -400,8 +463,8 @@ namespace com.workes.inventory.core
             return new InventoryTransaction<TKey>(first.Inventory, mergedDeltas, mergedRemoved, mergedAdded);
         }
 
-        /// <summary>Internal: executes a transaction (single- or future cross-inventory). Transaction must reference this inventory and must not already be applied.</summary>
-        internal void CommitTransaction(InventoryTransaction<TKey> transaction)
+        /// <summary>Executes a transaction. Transaction must reference this inventory and must not already be applied. Fires a single Changed event.</summary>
+        public void CommitTransaction(InventoryTransaction<TKey> transaction)
         {
             if (transaction == null)
                 throw new ArgumentNullException(nameof(transaction));
@@ -420,10 +483,10 @@ namespace com.workes.inventory.core
 
             var removed = new List<(int index, ItemInstance<TKey> instance)>(transaction.Removed);
             removed.Sort((a, b) => b.index.CompareTo(a.index));
-            foreach (var (index, _) in removed)
+            foreach (var (index, instance) in removed)
             {
                 RemoveAt(index);
-                changedEventArgs.Removed.Add(new ItemRemoved<TKey>(_items[index], index));
+                changedEventArgs.Removed.Add(new ItemRemoved<TKey>(instance, index));
             }
 
             foreach (var (instance, context) in transaction.Added)
@@ -433,7 +496,10 @@ namespace com.workes.inventory.core
             }
 
             transaction.MarkApplied();
-            Changed?.Invoke(this, changedEventArgs);
+
+            bool hasChanges = transaction.AmountDeltas.Count > 0 || transaction.Removed.Count > 0 || transaction.Added.Count > 0;
+            if (hasChanges)
+                Changed?.Invoke(this, changedEventArgs);
         }
 
         public bool TryAdd(ItemDefinition<TKey> definition, out string? error, int amount = 1, ILayoutContext<TKey>? context = null)
@@ -509,6 +575,7 @@ namespace com.workes.inventory.core
         /// Replaces the entire inventory with the given entries (e.g. for load/restore).
         /// Clears current contents, then adds each entry with its optional layout context.
         /// Caller must ensure entries are valid for the current capacity and layout.
+        /// Fires a single Changed event for the entire replacement.
         /// </summary>
         public void ReplaceContents(IEnumerable<(ItemDefinition<TKey> definition, int amount, ILayoutContext<TKey> context)> entries)
         {
@@ -516,12 +583,14 @@ namespace com.workes.inventory.core
             if (entries == null)
                 return;
 
+            var builder = CreateTransactionBuilder();
             foreach (var (definition, amount, context) in entries)
             {
                 if (definition == null || amount <= 0)
                     continue;
-                TryAdd(definition, out _, amount, context);
+                builder.TryAdd(definition, out _, amount, context);
             }
+            CommitTransaction(builder.ToInventoryTransaction());
         }
 
         public SerializedInventory<TKey> Serialize()
@@ -550,17 +619,21 @@ namespace com.workes.inventory.core
 
             Clear();
 
+            var builder = CreateTransactionBuilder();
             foreach (var serializedItem in data.Items)
             {
                 var definition = _manager.Registry.Resolve(serializedItem.DefinitionId);
 
-                var instance = new ItemInstance<TKey>(definition, serializedItem.Amount);
+                InstanceMetadata? metadata = null;
+                if (serializedItem.Metadata != null && serializedItem.Metadata.Count > 0)
+                {
+                    metadata = new InstanceMetadata();
+                    metadata.RestoreMetadata(serializedItem.Metadata);
+                }
 
-                if (serializedItem.Metadata != null)
-                    instance.Metadata.RestoreMetadata(serializedItem.Metadata);
-
-                TryAdd(definition, out _, serializedItem.Amount, null);
+                builder.TryAdd(definition, serializedItem.Amount, null, metadata, out _);
             }
+            CommitTransaction(builder.ToInventoryTransaction());
 
             _layout.RestorePersistentData(data.LayoutData as ILayoutPersistentData);
         }

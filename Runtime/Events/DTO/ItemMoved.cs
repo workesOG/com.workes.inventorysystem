@@ -4,13 +4,13 @@ namespace com.workes.inventory.events.dto
 {
     public class ItemMoved<TKey>
     {
-        public ItemInstance<TKey> Item { get; set; }
-        public object FromPosition { get; set; }
-        public object ToPosition { get; set; }
+        public ItemInstance<TKey> Instance { get; }
+        public object FromPosition { get; }
+        public object ToPosition { get; }
 
-        public ItemMoved(ItemInstance<TKey> item, object fromPosition, object toPosition)
+        public ItemMoved(ItemInstance<TKey> instance, object fromPosition, object toPosition)
         {
-            Item = item;
+            Instance = instance;
             FromPosition = fromPosition;
             ToPosition = toPosition;
         }

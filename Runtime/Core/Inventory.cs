@@ -704,7 +704,7 @@ namespace com.workes.inventory.core
             return serialized;
         }
 
-        public void Deserialize(SerializedInventory<TKey> data)
+        public void Deserialize(SerializedInventory<TKey> data, bool strict = false)
         {
             if (data == null)
                 throw new ArgumentNullException("Data cannot be null");
@@ -723,7 +723,9 @@ namespace com.workes.inventory.core
                     metadata.RestoreMetadata(serializedItem.Metadata);
                 }
 
-                builder.TryAdd(definition, serializedItem.Amount, null, metadata, out _);
+                builder.TryAdd(definition, serializedItem.Amount, null, metadata, out var error);
+                if (strict && error != null)
+                    throw new InvalidOperationException($"Failed to deserialize item {serializedItem.DefinitionId}: {error}");
             }
             CommitTransaction(builder.ToInventoryTransaction());
 

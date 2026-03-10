@@ -44,6 +44,11 @@ namespace com.workes.inventory.core
 
         public IInventoryLayout<TKey> Layout => _layout;
 
+        private int GetItemIndex(ItemInstance<TKey> instance)
+        {
+            return _items.IndexOf(instance);
+        }
+
         private void RemoveAt(int index)
         {
             _items.RemoveAt(index);
@@ -589,6 +594,62 @@ namespace com.workes.inventory.core
 
             Changed?.Invoke(this, changedEventArgs);
 
+            return true;
+        }
+
+        public bool TryMergeMove(ILayoutContext<TKey> contextFrom, ILayoutContext<TKey> contextTo, out string? error, int? amount = null)
+        {
+            error = null;
+
+            var itemFrom = _layout.GetAt(this, contextFrom);
+            var itemTo = _layout.GetAt(this, contextTo);
+
+            if (itemFrom == null || itemTo == null)
+            {
+                error = "One or both of the items not found in inventory.";
+                return false;
+            }
+
+            if (!itemFrom.IsStackCompatible(itemTo))
+            {
+                error = "Items are not stack compatible.";
+                return false;
+            }
+
+            int targetStack = itemTo.Amount;
+            int targetMaxStack = _stackResolver.ResolveMaxStackSize(this, itemTo);
+
+            if (targetStack == targetMaxStack)
+            {
+                error = "Target stack is already at max size, no items can be moved.";
+                return false;
+            }
+
+            int room = targetMaxStack - targetStack;
+
+            if (amount.HasValue && room < amount.Value)
+            {
+                error = "Not enough room in target stack to move the requested amount.";
+                return false;
+            }
+
+            int amountToMove = amount.HasValue ? amount.Value : Math.Min(room, itemFrom.Amount);
+            List<(int index, int delta)> amountDeltas = new List<(int index, int delta)>()
+            {
+                (GetItemIndex(itemTo), amountToMove)
+            };
+
+            bool allItemsMoved = amountToMove == itemFrom.Amount;
+            List<(int index, ItemInstance<TKey> instance)> removed = new();
+            if (allItemsMoved)
+                removed.Add((GetItemIndex(itemFrom), itemFrom));
+            else
+                amountDeltas.Add((GetItemIndex(itemFrom), -amountToMove));
+
+            var tx = new InventoryTransaction<TKey>(this, amountDeltas, removed, new List<(ItemInstance<TKey> instance, ILayoutContext<TKey>? context)>());
+            if (!ValidateTransactionWithCapacityAndLayout(tx, null, out error))
+                return false;
+            CommitTransaction(tx);
             return true;
         }
 

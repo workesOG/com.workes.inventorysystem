@@ -19,6 +19,8 @@ namespace com.workes.inventory.core
         /// </summary>
         public Inventory<TKey> CreateInventory()
         {
+            EnsureFrozen();
+
             return new Inventory<TKey>(
                 this,
                 DefaultStackResolver,
@@ -34,11 +36,19 @@ namespace com.workes.inventory.core
             IInventoryLayout<TKey>? layout = null,
             ICapacityPolicy<TKey>? capacityPolicy = null)
         {
+            EnsureFrozen();
+
             return new Inventory<TKey>(
                 this,
                 stackResolver ?? DefaultStackResolver,
                 capacityPolicy ?? DefaultCapacityPolicy,
                 layout ?? DefaultLayout);
+        }
+
+        private void EnsureFrozen()
+        {
+            if (Registry.Frozen)
+                throw new InvalidOperationException("Item registry has not yet been frozen. Inventory creation is not allowed until the registry is frozen.");
         }
     }
 }

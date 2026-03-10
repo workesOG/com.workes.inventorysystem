@@ -11,6 +11,8 @@ namespace com.workes.inventory.core
 
         private bool frozen = false;
 
+        public readonly bool Frozen => frozen;
+
         public IEnumerable<ItemDefinition<TKey>> Definitions => _definitions.Values;
 
         public void Register(ItemDefinition<TKey> definition)

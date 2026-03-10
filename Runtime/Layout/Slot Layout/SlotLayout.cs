@@ -22,23 +22,29 @@ namespace com.workes.inventory.layout
 
         public int GetSlotCount(Inventory<TKey> inventory) => _slotMap.Count;
 
-        public ItemInstance<TKey>? GetAt(Inventory<TKey> inventory, int index)
+        public ItemInstance<TKey>? GetAt(Inventory<TKey> inventory, ILayoutContext<TKey> context)
         {
-            if (index < 0 || index >= _slotMap.Count)
+            if (context is not SlotLayoutContext<TKey> slotContext)
                 return null;
 
-            var itemIndex = _slotMap[index];
+            if (slotContext.SlotIndex < 0 || slotContext.SlotIndex >= _slotMap.Count)
+                return null;
+
+            var itemIndex = _slotMap[slotContext.SlotIndex];
             if (!itemIndex.HasValue)
                 return null;
 
             return inventory.Items[itemIndex.Value];
         }
 
-        public int? GetSlotOfItem(int index)
+        public int? GetSlotOfItem(ILayoutContext<TKey> context)
         {
+            if (context is not SlotLayoutContext<TKey> slotContext)
+                return null;
+
             for (int i = 0; i < _slotMap.Count; i++)
             {
-                if (_slotMap[i] == index)
+                if (_slotMap[i] == slotContext.SlotIndex)
                     return i;
             }
 
@@ -202,43 +208,83 @@ namespace com.workes.inventory.layout
             return -1;
         }
 
-        public bool TryMove(Inventory<TKey> inventory, int storageIndex, ILayoutContext<TKey>? context, out object fromPosition, out object toPosition, out string? error)
+        public bool TryMove(Inventory<TKey> inventory, ILayoutContext<TKey> contextFrom, ILayoutContext<TKey> contextTo, out string? error)
         {
             error = null;
-            fromPosition = null;
-            toPosition = null;
 
-            if (context is not SlotLayoutContext<TKey> slotContext)
+            if (contextFrom is not SlotLayoutContext<TKey> slotContextFrom || contextTo is not SlotLayoutContext<TKey> slotContextTo)
             {
                 error = "Invalid context type.";
                 return false;
             }
 
-            int fromSlot;
-            if (!_slotMap[storageIndex].HasValue)
-            {
-                error = "Item not found in storage index.";
-                return false;
-            }
-            fromSlot = _slotMap[storageIndex].Value;
-            fromPosition = fromSlot;
+            int fromSlot = slotContextFrom.SlotIndex;
+            int toSlot = slotContextTo.SlotIndex;
 
-            int toSlot = slotContext.SlotIndex;
-            toPosition = toSlot;
-            if (toSlot < 0 || toSlot >= _slotMap.Count)
+            if (toSlot < 0 || toSlot >= _slotMap.Count || fromSlot < 0 || fromSlot >= _slotMap.Count)
             {
                 error = "Slot index out of range.";
                 return false;
             }
 
-            if (_slotMap[toSlot].HasValue)
+            if (toSlot == fromSlot)
             {
-                error = "Slot already occupied.";
+                error = "Cannot move item to the same slot.";
                 return false;
             }
 
-            _slotMap[toSlot] = storageIndex;
+            if (!_slotMap[fromSlot].HasValue)
+            {
+                error = "Source slot has no item.";
+                return false;
+            }
+
+            if (_slotMap[toSlot].HasValue)
+            {
+                error = "Target slot already occupied.";
+                return false;
+            }
+
+            _slotMap[toSlot] = _slotMap[fromSlot];
             _slotMap[fromSlot] = null;
+
+            return true;
+        }
+
+        public bool TrySwap(Inventory<TKey> inventory, ILayoutContext<TKey> contextFrom, ILayoutContext<TKey> contextTo, out string? error)
+        {
+            error = null;
+
+            if (contextFrom is not SlotLayoutContext<TKey> slotContextFrom || contextTo is not SlotLayoutContext<TKey> slotContextTo)
+            {
+                error = "Invalid context type.";
+                return false;
+            }
+
+            int fromSlot = slotContextFrom.SlotIndex;
+            int toSlot = slotContextTo.SlotIndex;
+
+            if (toSlot < 0 || toSlot >= _slotMap.Count || fromSlot < 0 || fromSlot >= _slotMap.Count)
+            {
+                error = "Slot index out of range.";
+                return false;
+            }
+
+            if (toSlot == fromSlot)
+            {
+                error = "Cannot swap item with itself.";
+                return false;
+            }
+
+            if (!_slotMap[fromSlot].HasValue || !_slotMap[toSlot].HasValue)
+            {
+                error = "One or both of the slots has no item.";
+                return false;
+            }
+
+            var temp = _slotMap[fromSlot];
+            _slotMap[fromSlot] = _slotMap[toSlot];
+            _slotMap[toSlot] = temp;
 
             return true;
         }

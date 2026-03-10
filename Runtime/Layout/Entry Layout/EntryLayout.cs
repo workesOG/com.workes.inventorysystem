@@ -18,23 +18,29 @@ namespace com.workes.inventory.layout
             return _order.Count;
         }
 
-        public ItemInstance<TKey>? GetAt(Inventory<TKey> inventory, int index)
+        public ItemInstance<TKey>? GetAt(Inventory<TKey> inventory, ILayoutContext<TKey> context)
         {
-            if (index < 0 || index >= _order.Count)
+            if (context is not EntryLayoutContext<TKey> entryContext)
                 return null;
 
-            int itemIndex = _order[index];
+            if (entryContext.TargetIndex < 0 || entryContext.TargetIndex >= _order.Count)
+                return null;
+
+            int itemIndex = _order[entryContext.TargetIndex];
             if (itemIndex < 0 || itemIndex >= inventory.Items.Count)
                 return null;
 
             return inventory.Items[itemIndex];
         }
 
-        public int? GetSlotOfItem(int index)
+        public int? GetSlotOfItem(ILayoutContext<TKey> context)
         {
+            if (context is not EntryLayoutContext<TKey> entryContext)
+                return null;
+
             for (int i = 0; i < _order.Count; i++)
             {
-                if (_order[i] == index)
+                if (_order[i] == entryContext.TargetIndex)
                     return i;
             }
 
@@ -130,45 +136,68 @@ namespace com.workes.inventory.layout
             return true;
         }
 
-        public bool TryMove(Inventory<TKey> inventory, int storageIndex, ILayoutContext<TKey>? context, out object fromPosition, out object toPosition, out string? error)
+        public bool TryMove(Inventory<TKey> inventory, ILayoutContext<TKey> contextFrom, ILayoutContext<TKey> contextTo, out string? error)
         {
             error = null;
-            fromPosition = null;
-            toPosition = null;
 
-            int fromPos = _order.IndexOf(storageIndex);
-            if (fromPos < 0)
+            if (contextTo is not EntryLayoutContext<TKey> entryContextTo || contextFrom is not EntryLayoutContext<TKey> entryContextFrom)
             {
-                error = "Item not found in layout.";
+                error = "Invalid context type.";
                 return false;
             }
 
-            fromPosition = fromPos;
+            int fromPos = entryContextFrom.TargetIndex;
+            int targetPos = entryContextTo.TargetIndex;
 
-            if (context is not EntryLayoutContext<TKey> entryContext)
+            if (fromPos < 0 || fromPos >= _order.Count || targetPos < 0 || targetPos >= _order.Count)
             {
-                // No valid target context: treat as a no-op move.
-                toPosition = fromPos;
-                return true;
-            }
-
-            int targetPos = entryContext.TargetIndex;
-            if (targetPos < 0 || targetPos >= _order.Count)
-            {
-                error = "Target index out of range.";
+                error = "Invalid position.";
                 return false;
             }
-
-            toPosition = targetPos;
 
             if (targetPos == fromPos)
-                return true;
+            {
+                error = "Cannot move item to the same position.";
+                return false;
+            }
 
-            int itemIndex = _order[fromPos];
+            int storageIndex = _order[fromPos];
             _order.RemoveAt(fromPos);
             if (targetPos > fromPos)
                 targetPos--;
-            _order.Insert(targetPos, itemIndex);
+            _order.Insert(targetPos, storageIndex);
+
+            return true;
+        }
+
+        public bool TrySwap(Inventory<TKey> inventory, ILayoutContext<TKey> contextFrom, ILayoutContext<TKey> contextTo, out string? error)
+        {
+            error = null;
+
+            if (contextTo is not EntryLayoutContext<TKey> entryContextTo || contextFrom is not EntryLayoutContext<TKey> entryContextFrom)
+            {
+                error = "Invalid context type.";
+                return false;
+            }
+
+            int fromPos = entryContextFrom.TargetIndex;
+            int targetPos = entryContextTo.TargetIndex;
+
+            if (fromPos < 0 || fromPos >= _order.Count || targetPos < 0 || targetPos >= _order.Count)
+            {
+                error = "Invalid position.";
+                return false;
+            }
+
+            if (fromPos == targetPos)
+            {
+                error = "Cannot swap item with itself.";
+                return false;
+            }
+
+            var temp = _order[fromPos];
+            _order[fromPos] = _order[targetPos];
+            _order[targetPos] = temp;
 
             return true;
         }

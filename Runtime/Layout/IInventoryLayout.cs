@@ -7,9 +7,9 @@ namespace com.workes.inventory.layout
     {
         int GetSlotCount(Inventory<TKey> inventory);
 
-        ItemInstance<TKey> GetAt(Inventory<TKey> inventory, int index);
+        ItemInstance<TKey> GetAt(Inventory<TKey> inventory, ILayoutContext<TKey> context);
 
-        int? GetSlotOfItem(int itemIndex);
+        int? GetSlotOfItem(ILayoutContext<TKey> context);
 
         IEnumerable<int> GetMergeCandidates(Inventory<TKey> inventory, ItemInstance<TKey> prototype, ILayoutContext<TKey>? context);
 
@@ -17,7 +17,9 @@ namespace com.workes.inventory.layout
 
         bool CanAcceptNewItem(Inventory<TKey> inventory, ItemInstance<TKey> instance, ILayoutContext<TKey>? context, out string? error);
 
-        bool TryMove(Inventory<TKey> inventory, int storageIndex, ILayoutContext<TKey>? context, out object fromPosition, out object toPosition , out string? error);
+        bool TryMove(Inventory<TKey> inventory, ILayoutContext<TKey> contextFrom, ILayoutContext<TKey> contextTo, out string? error);
+
+        bool TrySwap(Inventory<TKey> inventory, ILayoutContext<TKey> contextFrom, ILayoutContext<TKey> contextTo, out string? error);
 
         void OnItemAdded(Inventory<TKey> inventory, int index, ILayoutContext<TKey>? context);
 

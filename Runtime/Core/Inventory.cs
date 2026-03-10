@@ -534,25 +534,56 @@ namespace com.workes.inventory.core
             return true;
         }
 
-        public bool TryMove(int storageIndex, ILayoutContext<TKey>? context, out string? error)
+        public bool TryMove(ILayoutContext<TKey> contextFrom, ILayoutContext<TKey> contextTo, out string? error)
         {
             error = null;
 
-            if (storageIndex < 0 || storageIndex >= _items.Count)
+            var item = _layout.GetAt(this, contextFrom);
+
+            if (item == null)
             {
-                error = "Storage index out of range.";
+                error = "Item not found in inventory.";
                 return false;
             }
 
-            var item = _items[storageIndex];
-
-            if (!_layout.TryMove(this, storageIndex, context, out var fromPosition, out var toPosition, out error))
+            if (!_layout.TryMove(this, contextFrom, contextTo, out error))
                 return false;
+
 
             var changedEventArgs = new InventoryChangedEventArgs<TKey>(
                 moved: new List<ItemMoved<TKey>>
                 {
-                    new ItemMoved<TKey>(item, fromPosition, toPosition)
+                    new ItemMoved<TKey>(item, contextFrom, contextTo)
+                }
+            );
+
+            Changed?.Invoke(this, changedEventArgs);
+
+            return true;
+        }
+
+        public bool TrySwap(ILayoutContext<TKey> contextFrom, ILayoutContext<TKey> contextTo, out string? error)
+        {
+            error = null;
+
+            var itemFrom = _layout.GetAt(this, contextFrom);
+            var itemTo = _layout.GetAt(this, contextTo);
+
+            if (itemFrom == null || itemTo == null)
+            {
+                error = "One or both of the items not found in inventory.";
+                return false;
+            }
+
+            if (!_layout.TrySwap(this, contextFrom, contextTo, out error))
+            {
+                return false;
+            }
+
+            var changedEventArgs = new InventoryChangedEventArgs<TKey>(
+                swapped: new List<ItemSwapped<TKey>>
+                {
+                    new ItemSwapped<TKey>(contextFrom, contextTo, itemTo, itemFrom) // Swapped items to reflect where the items are after the swap
                 }
             );
 

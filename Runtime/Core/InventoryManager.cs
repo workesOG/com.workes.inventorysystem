@@ -30,15 +30,15 @@ namespace com.workes.inventory.core
         /// Creates an inventory with the given layout and capacity policy.
         /// </summary>
         public Inventory<TKey> CreateInventory(
-            IStackResolver<TKey> stackResolver,
-            IInventoryLayout<TKey> layout,
-            ICapacityPolicy<TKey> capacityPolicy)
+            IStackResolver<TKey>? stackResolver = null,
+            IInventoryLayout<TKey>? layout = null,
+            ICapacityPolicy<TKey>? capacityPolicy = null)
         {
             return new Inventory<TKey>(
                 this,
-                stackResolver,
-                capacityPolicy,
-                layout);
+                stackResolver ?? DefaultStackResolver,
+                capacityPolicy ?? DefaultCapacityPolicy,
+                layout ?? DefaultLayout);
         }
     }
 }

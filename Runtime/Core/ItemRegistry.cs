@@ -9,15 +9,15 @@ namespace com.workes.inventory.core
         private readonly Dictionary<TKey, ItemDefinition<TKey>> _definitions = new();
         private readonly Dictionary<TKey, TKey> _migrations = new();
 
-        private bool frozen = false;
+        private bool _frozen = false;
 
-        public readonly bool Frozen => frozen;
+        public bool Frozen => _frozen;
 
         public IEnumerable<ItemDefinition<TKey>> Definitions => _definitions.Values;
 
         public void Register(ItemDefinition<TKey> definition)
         {
-            if (frozen)
+            if (_frozen)
                 throw new InvalidOperationException("Item registry is frozen and cannot be modified.");
 
             if (definition == null)
@@ -33,7 +33,7 @@ namespace com.workes.inventory.core
 
         public void RegisterMigration(TKey oldId, TKey newId)
         {
-            if (frozen)
+            if (_frozen)
                 throw new InvalidOperationException("Item registry is frozen and cannot be modified.");
 
             if (oldId == null || newId == null)
@@ -45,7 +45,25 @@ namespace com.workes.inventory.core
             if (_definitions.ContainsKey(oldId))
                 throw new InvalidOperationException("Can't migrate from a registered definition.");
 
+            EnsureNoMigrationLoop(newId, oldId);
+
             _migrations[oldId] = newId;
+        }
+
+        private void EnsureNoMigrationLoop(TKey newId, TKey oldId)
+        {
+            var current = newId;
+            while (_migrations.TryGetValue(current, out var migratedId))
+            {
+                current = migratedId;
+                if (EqualityComparer<TKey>.Default.Equals(current, oldId))
+                    throw new InvalidOperationException("Migration loop detected.");
+            }
+        }
+
+        public bool Contains(TKey id)
+        {
+            return _definitions.ContainsKey(id);
         }
 
         public bool TryGet(TKey id, out ItemDefinition<TKey> definition)
@@ -65,6 +83,6 @@ namespace com.workes.inventory.core
             return definition;
         }
 
-        public void Freeze() {frozen = true;}
+        public void Freeze() { _frozen = true; }
     }
 }

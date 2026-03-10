@@ -1,6 +1,7 @@
 using com.workes.inventory.stacking;
 using com.workes.inventory.layout;
 using com.workes.inventory.capacity;
+using System;
 
 namespace com.workes.inventory.core
 {

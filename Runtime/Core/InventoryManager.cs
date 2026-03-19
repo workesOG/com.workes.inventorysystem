@@ -1,6 +1,7 @@
 using com.workes.inventory.stacking;
 using com.workes.inventory.layout;
 using com.workes.inventory.capacity;
+using com.workes.inventory.rules;
 using System;
 
 namespace com.workes.inventory.core
@@ -10,6 +11,7 @@ namespace com.workes.inventory.core
         public IStackResolver<TKey> DefaultStackResolver { get; set; }
         public ICapacityPolicy<TKey> DefaultCapacityPolicy { get; set; }
         public IInventoryLayout<TKey> DefaultLayout { get; set; }
+        public RuleContainer<TKey> DefaultRules { get; set; }
 
         private readonly ItemRegistry<TKey> _registry = new();
 
@@ -26,7 +28,8 @@ namespace com.workes.inventory.core
                 this,
                 DefaultStackResolver,
                 DefaultCapacityPolicy,
-                DefaultLayout);
+                DefaultLayout,
+                DefaultRules);
         }
 
         /// <summary>
@@ -35,7 +38,8 @@ namespace com.workes.inventory.core
         public Inventory<TKey> CreateInventory(
             IStackResolver<TKey>? stackResolver = null,
             IInventoryLayout<TKey>? layout = null,
-            ICapacityPolicy<TKey>? capacityPolicy = null)
+            ICapacityPolicy<TKey>? capacityPolicy = null,
+            RuleContainer<TKey>? rules = null)
         {
             EnsureFrozen();
 
@@ -43,7 +47,8 @@ namespace com.workes.inventory.core
                 this,
                 stackResolver ?? DefaultStackResolver,
                 capacityPolicy ?? DefaultCapacityPolicy,
-                layout ?? DefaultLayout);
+                layout ?? DefaultLayout,
+                rules ?? DefaultRules);
         }
 
         private void EnsureFrozen()

@@ -19,6 +19,7 @@ namespace com.workes.inventory.core
         private readonly IStackResolver<TKey> _stackResolver;
         private readonly ICapacityPolicy<TKey> _capacityPolicy;
         private readonly IInventoryLayout<TKey> _layout;
+        private readonly RuleContainer<TKey> _rules;
 
         public AttributeContainer Attributes { get; } = new();
 
@@ -28,7 +29,8 @@ namespace com.workes.inventory.core
             InventoryManager<TKey> manager,
             IStackResolver<TKey> stackResolver,
             ICapacityPolicy<TKey> capacityPolicy,
-            IInventoryLayout<TKey> layout)
+            IInventoryLayout<TKey> layout,
+            RuleContainer<TKey> rules)
         {
             if (manager == null)
                 throw new ArgumentNullException("Manager cannot be null");
@@ -36,6 +38,7 @@ namespace com.workes.inventory.core
             _stackResolver = stackResolver;
             _capacityPolicy = capacityPolicy;
             _layout = layout;
+            _rules = rules;
         }
 
         public IReadOnlyList<ItemInstance<TKey>> Items => _items;
@@ -235,7 +238,7 @@ namespace com.workes.inventory.core
             }
 
             var tx = new InventoryTransaction<TKey>(this, amountDeltas, new List<(int index, ItemInstance<TKey> instance)>(), added);
-            if (!ValidateTransactionWithCapacityAndLayout(tx, context, out error))
+            if (!ValidateTransactionConstraints(tx, context, out error))
                 return false;
             transaction = tx;
             return true;
@@ -280,7 +283,7 @@ namespace com.workes.inventory.core
             else
                 amountDeltas.Add((index, -amount));
             var tx = new InventoryTransaction<TKey>(this, amountDeltas, removed, new List<(ItemInstance<TKey> instance, ILayoutContext<TKey>? context)>());
-            if (!ValidateTransactionWithCapacityAndLayout(tx, null, out error))
+            if (!ValidateTransactionConstraints(tx, null, out error))
                 return false;
             transaction = tx;
             return true;
@@ -314,7 +317,7 @@ namespace com.workes.inventory.core
             else
                 amountDeltas.Add((index, -amount));
             var tx = new InventoryTransaction<TKey>(this, amountDeltas, removed, new List<(ItemInstance<TKey> instance, ILayoutContext<TKey>? context)>());
-            if (!ValidateTransactionWithCapacityAndLayout(tx, null, out error))
+            if (!ValidateTransactionConstraints(tx, null, out error))
                 return false;
             transaction = tx;
             return true;
@@ -382,17 +385,19 @@ namespace com.workes.inventory.core
             }
 
             var tx = new InventoryTransaction<TKey>(this, amountDeltas, removed, new List<(ItemInstance<TKey> instance, ILayoutContext<TKey>? context)>());
-            if (!ValidateTransactionWithCapacityAndLayout(tx, null, out error))
+            if (!ValidateTransactionConstraints(tx, null, out error))
                 return false;
             transaction = tx;
             return true;
         }
 
-        private bool ValidateTransactionWithCapacityAndLayout(InventoryTransaction<TKey> tx, ILayoutContext<TKey>? context, out string? error)
+        private bool ValidateTransactionConstraints(InventoryTransaction<TKey> tx, ILayoutContext<TKey>? context, out string? error)
         {
             error = null;
             var normalized = GenerateNormalizedInventoryTransaction(tx);
             if (!_capacityPolicy.CanApply(this, normalized, out error))
+                return false;
+            if (!_rules.CanApply(this, normalized, out error))
                 return false;
             if (!_layout.CanSatisfyPlacement(this, tx, context, out error))
                 return false;
@@ -647,7 +652,7 @@ namespace com.workes.inventory.core
                 amountDeltas.Add((GetItemIndex(itemFrom), -amountToMove));
 
             var tx = new InventoryTransaction<TKey>(this, amountDeltas, removed, new List<(ItemInstance<TKey> instance, ILayoutContext<TKey>? context)>());
-            if (!ValidateTransactionWithCapacityAndLayout(tx, null, out error))
+            if (!ValidateTransactionConstraints(tx, null, out error))
                 return false;
             CommitTransaction(tx);
             return true;

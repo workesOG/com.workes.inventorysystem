@@ -4,18 +4,21 @@ using System;
 
 namespace com.workes.inventory.rules
 {
-    public class RequireTagRule<TKey> : IRulePolicy<TKey>
+    /// <summary>
+    /// Requires that added items have at least one of the provided tags.
+    /// </summary>
+    public class RequireAnyTagRule<TKey> : IRulePolicy<TKey>
     {
         private readonly TagKey[] _tags;
         public string Id { get; }
 
-        public RequireTagRule(params TagKey[] tags)
+        public RequireAnyTagRule(params TagKey[] tags)
         {
             if (tags == null || tags.Length == 0)
                 throw new ArgumentException("At least one tag is required.", nameof(tags));
             var tagsDescription = string.Join(", ", Array.ConvertAll(tags, t => t.ToString()));
             _tags = tags;
-            Id = $"RequireTag[{tagsDescription}]";
+            Id = $"RequireAnyTag[{tagsDescription}]";
         }
 
         public bool CanApply(
@@ -26,13 +29,20 @@ namespace com.workes.inventory.rules
             var requiredTagsDescription = string.Join(", ", Array.ConvertAll(_tags, t => t.ToString()));
             foreach (var (definition, _, _) in transaction.Added)
             {
+                bool hasAny = false;
                 foreach (var tag in _tags)
                 {
-                    if (!definition.HasTag(tag))
+                    if (definition.HasTag(tag))
                     {
-                        error = $"Expected item to have all required tags ({requiredTagsDescription}), but it was missing '{tag}'.";
-                        return false;
+                        hasAny = true;
+                        break;
                     }
+                }
+
+                if (!hasAny)
+                {
+                    error = $"Expected item to have at least one of the required tags ({requiredTagsDescription}), but it had none.";
+                    return false;
                 }
             }
 

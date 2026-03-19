@@ -7,11 +7,13 @@ namespace com.workes.inventory.rules
     {
         private readonly string _key;
         private readonly object _value;
+        public string Id { get; }
 
         public RequireMetadataRule(string key, object value)
         {
             _key = key;
             _value = value;
+            Id = $"RequireMetadata[{_key}={_value?.ToString()}]";
         }
 
         public bool CanApply(
@@ -23,7 +25,7 @@ namespace com.workes.inventory.rules
             {
                 if (metadata == null || !metadata.TryGet<object>(_key, out var val) || !val.Equals(_value))
                 {
-                    error = $"Item must have metadata '{_key}' = {_value}.";
+                    error = $"Expected item metadata '{_key}' to equal '{_value}'.";
                     return false;
                 }
             }

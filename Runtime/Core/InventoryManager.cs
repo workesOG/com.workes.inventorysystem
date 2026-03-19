@@ -17,6 +17,17 @@ namespace com.workes.inventory.core
 
         public ItemRegistry<TKey> Registry => _registry;
 
+        public InventoryManager(IStackResolver<TKey> defaultStackResolver, ICapacityPolicy<TKey> defaultCapacityPolicy, IInventoryLayout<TKey> defaultLayout, RuleContainer<TKey> defaultRules = null)
+        {
+            DefaultStackResolver = defaultStackResolver;
+            DefaultCapacityPolicy = defaultCapacityPolicy;
+            DefaultLayout = defaultLayout;
+            if (defaultRules != null)
+                DefaultRules = defaultRules;
+            else
+                DefaultRules = new RuleContainer<TKey>();
+        }
+
         /// <summary>
         /// Creates an inventory using the manager's default stack resolver, capacity policy, and layout.
         /// </summary>

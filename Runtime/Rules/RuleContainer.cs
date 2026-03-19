@@ -23,19 +23,26 @@ namespace com.workes.inventory.rules
             }
         }
 
-        private readonly Dictionary<string, RuleEntry> _rules;
+        private readonly Dictionary<string, RuleEntry> _rules = new Dictionary<string, RuleEntry>(StringComparer.Ordinal);
         private long _sequence;
 
-        /* DEPRECATED, USE COLLECTION INITIALIZER INSTEAD
+        public RuleContainer() { }
+
+        /*
         public RuleContainer(params IRulePolicy<TKey>[] rules)
         {
-            _rules = new Dictionary<string, RuleEntry>(StringComparer.Ordinal);
-
             if (rules == null)
                 return;
 
             foreach (var rule in rules)
-                Add(rule);
+            {
+                if (rule == null)
+                    continue;
+                if (string.IsNullOrWhiteSpace(rule.Id))
+                    throw new ArgumentException("Rule id cannot be null/empty.", nameof(rules));
+
+                Add(rule.Id, rule);
+            }
         }*/
 
         public bool CanApply(
@@ -110,7 +117,10 @@ namespace com.workes.inventory.rules
             if (rule == null)
                 throw new System.ArgumentNullException(nameof(rule));
 
-            _rules[id] = new RuleEntry(WrapRule(id, rule), priority, enabled, _sequence++);
+            if (_rules.TryGetValue(id, out var existing))
+                _rules[id] = new RuleEntry(WrapRule(id, rule), priority, enabled, existing.Sequence);
+            else
+                _rules[id] = new RuleEntry(WrapRule(id, rule), priority, enabled, _sequence++);
         }
 
         public bool Remove(string id)

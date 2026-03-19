@@ -22,5 +22,10 @@ namespace com.workes.inventory.core
         {
             Schema.Validate(Attributes);
         }
+
+        public bool HasTag(TagKey tag)
+        {
+            return Tags.Has(tag);
+        }
     }
 }

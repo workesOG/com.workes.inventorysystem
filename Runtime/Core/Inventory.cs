@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using com.workes.inventory.attributes;
 using com.workes.inventory.layout;
 using com.workes.inventory.stacking;
@@ -8,6 +5,9 @@ using com.workes.inventory.capacity;
 using com.workes.inventory.events;
 using com.workes.inventory.events.dto;
 using com.workes.inventory.rules;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace com.workes.inventory.core
 {

@@ -14,12 +14,27 @@ namespace com.workes.inventory.core
     {
         private readonly Inventory<TKey> _targetInventory;
         private readonly Inventory<TKey> _simulation;
-        private InventoryTransaction<TKey>? _accumulatedTransaction;
+        private readonly List<SimulationEntry> _simulationEntries = new();
+
+        private sealed class SimulationEntry
+        {
+            public int? OriginalIndex { get; }
+            public ILayoutContext<TKey>? AddedContext { get; }
+
+            public SimulationEntry(int? originalIndex, ILayoutContext<TKey>? addedContext)
+            {
+                OriginalIndex = originalIndex;
+                AddedContext = addedContext;
+            }
+        }
 
         internal InventoryTransactionBuilder(Inventory<TKey> targetInventory, Inventory<TKey> simulation)
         {
             _targetInventory = targetInventory ?? throw new ArgumentNullException(nameof(targetInventory));
             _simulation = simulation ?? throw new ArgumentNullException(nameof(simulation));
+
+            for (int i = 0; i < _simulation.Items.Count; i++)
+                _simulationEntries.Add(new SimulationEntry(i, null));
         }
 
         /// <summary>Adds items to the simulated state. Returns false if the operation would fail.</summary>
@@ -85,21 +100,61 @@ namespace com.workes.inventory.core
         /// </summary>
         public InventoryTransaction<TKey> ToInventoryTransaction()
         {
-            if (_accumulatedTransaction == null)
+            var amountDeltas = new List<(int index, int delta)>();
+            var removed = new List<(int index, ItemInstance<TKey> instance)>();
+            var added = new List<(ItemInstance<TKey> instance, ILayoutContext<TKey>? context)>();
+            var remainingOriginalIndices = new HashSet<int>();
+
+            for (int simulationIndex = 0; simulationIndex < _simulation.Items.Count; simulationIndex++)
             {
-                return new InventoryTransaction<TKey>(
-                    _targetInventory,
-                    new List<(int index, int delta)>(),
-                    new List<(int index, ItemInstance<TKey> instance)>(),
-                    new List<(ItemInstance<TKey> instance, ILayoutContext<TKey>? context)>());
+                var entry = _simulationEntries[simulationIndex];
+                var simulationItem = _simulation.Items[simulationIndex];
+                if (entry.OriginalIndex.HasValue)
+                {
+                    int originalIndex = entry.OriginalIndex.Value;
+                    remainingOriginalIndices.Add(originalIndex);
+                    int originalAmount = _targetInventory.Items[originalIndex].Amount;
+                    int delta = simulationItem.Amount - originalAmount;
+                    if (delta != 0)
+                        amountDeltas.Add((originalIndex, delta));
+                }
+                else
+                {
+                    added.Add((simulationItem, entry.AddedContext));
+                }
             }
 
-            return _accumulatedTransaction.ForInventory(_targetInventory);
+            for (int originalIndex = 0; originalIndex < _targetInventory.Items.Count; originalIndex++)
+            {
+                if (!remainingOriginalIndices.Contains(originalIndex))
+                    removed.Add((originalIndex, _targetInventory.Items[originalIndex]));
+            }
+
+            return new InventoryTransaction<TKey>(_targetInventory, amountDeltas, removed, added);
         }
 
         private ItemInstance<TKey>? ResolveToSimulationInstance(ItemInstance<TKey> instance)
         {
             if (instance == null) return null;
+
+            int targetIndex = -1;
+            for (int i = 0; i < _targetInventory.Items.Count; i++)
+            {
+                if (ReferenceEquals(_targetInventory.Items[i], instance))
+                {
+                    targetIndex = i;
+                    break;
+                }
+            }
+            if (targetIndex >= 0)
+            {
+                for (int i = 0; i < _simulationEntries.Count; i++)
+                {
+                    if (_simulationEntries[i].OriginalIndex == targetIndex)
+                        return _simulation.Items[i];
+                }
+            }
+
             foreach (var simInst in _simulation.Items)
             {
                 if (EqualityComparer<TKey>.Default.Equals(simInst.Definition.Id, instance.Definition.Id) &&
@@ -111,10 +166,13 @@ namespace com.workes.inventory.core
 
         private void MergeAndApply(InventoryTransaction<TKey> tx)
         {
-            if (_accumulatedTransaction == null)
-                _accumulatedTransaction = tx;
-            else
-                _accumulatedTransaction = Inventory<TKey>.MergeTransactions(_accumulatedTransaction, tx);
+            var removed = new List<(int index, ItemInstance<TKey> instance)>(tx.Removed);
+            removed.Sort((a, b) => b.index.CompareTo(a.index));
+            foreach (var (index, _) in removed)
+                _simulationEntries.RemoveAt(index);
+
+            foreach (var (_, context) in tx.Added)
+                _simulationEntries.Add(new SimulationEntry(null, context));
 
             _simulation.ApplyTransactionSilent(tx);
         }

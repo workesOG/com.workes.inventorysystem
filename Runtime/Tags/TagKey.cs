@@ -2,7 +2,7 @@ using System;
 
 namespace com.workes.inventory.tags
 {
-    public sealed class TagKey
+    public sealed class TagKey : IEquatable<TagKey>
     {
         public string Id { get; }
 
@@ -12,6 +12,21 @@ namespace com.workes.inventory.tags
                 throw new ArgumentException("TagKey id cannot be null or empty.");
 
             Id = id;
+        }
+
+        public bool Equals(TagKey? other)
+        {
+            return other != null && string.Equals(Id, other.Id, StringComparison.Ordinal);
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is TagKey other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return StringComparer.Ordinal.GetHashCode(Id);
         }
 
         public override string ToString() => Id;

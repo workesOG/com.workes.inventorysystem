@@ -204,7 +204,12 @@ namespace com.workes.inventory.layout
 
         public void OnItemAdded(Inventory<TKey> inventory, int index, ILayoutContext<TKey>? context)
         {
-            // New items are appended structurally at the end.
+            if (context is EntryLayoutContext<TKey> entryContext)
+            {
+                _order.Insert(entryContext.TargetIndex, index);
+                return;
+            }
+
             _order.Add(index);
         }
 
@@ -229,7 +234,7 @@ namespace com.workes.inventory.layout
             _order.Clear();
         }
 
-        public ILayoutPersistentData GetPersistentData() => new EntryLayoutPersistentData { Order = _order };
+        public ILayoutPersistentData GetPersistentData() => new EntryLayoutPersistentData { Order = new List<int>(_order) };
 
         public void RestorePersistentData(ILayoutPersistentData? data)
         {

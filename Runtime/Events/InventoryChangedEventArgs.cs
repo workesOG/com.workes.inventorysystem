@@ -25,18 +25,18 @@ namespace com.workes.inventory.events
         }
 
         public InventoryChangedEventArgs(
-            List<ItemAdded<TKey>> added = null,
-            List<ItemRemoved<TKey>> removed = null,
-            List<ItemModified<TKey>> modified = null,
-            List<ItemMoved<TKey>> moved = null,
-            List<ItemSwapped<TKey>> swapped = null,
+            List<ItemAdded<TKey>>? added = null,
+            List<ItemRemoved<TKey>>? removed = null,
+            List<ItemModified<TKey>>? modified = null,
+            List<ItemMoved<TKey>>? moved = null,
+            List<ItemSwapped<TKey>>? swapped = null,
             bool cleared = false)
         {
-            Added = added;
-            Removed = removed;
-            Modified = modified;
-            Moved = moved;
-            Swapped = swapped;
+            Added = added ?? new List<ItemAdded<TKey>>();
+            Removed = removed ?? new List<ItemRemoved<TKey>>();
+            Modified = modified ?? new List<ItemModified<TKey>>();
+            Moved = moved ?? new List<ItemMoved<TKey>>();
+            Swapped = swapped ?? new List<ItemSwapped<TKey>>();
             Cleared = cleared;
         }
     }

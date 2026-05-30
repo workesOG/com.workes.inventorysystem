@@ -489,7 +489,7 @@ namespace com.workes.inventory.core
             foreach (var (index, delta) in transaction.AmountDeltas)
             {
                 _items[index].AddAmount(delta);
-                changedEventArgs.Added.Add(new ItemAdded<TKey>(_items[index], index));
+                changedEventArgs.Modified.Add(new ItemModified<TKey>(_items[index], index));
             }
 
             var removed = new List<(int index, ItemInstance<TKey> instance)>(transaction.Removed);

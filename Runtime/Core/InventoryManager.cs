@@ -39,7 +39,7 @@ namespace com.workes.inventory.core
                 this,
                 DefaultStackResolver,
                 DefaultCapacityPolicy,
-                DefaultLayout,
+                DefaultLayout.Clone(),
                 DefaultRules);
         }
 
@@ -58,7 +58,7 @@ namespace com.workes.inventory.core
                 this,
                 stackResolver ?? DefaultStackResolver,
                 capacityPolicy ?? DefaultCapacityPolicy,
-                layout ?? DefaultLayout,
+                (layout ?? DefaultLayout).Clone(),
                 rules ?? DefaultRules);
         }
 

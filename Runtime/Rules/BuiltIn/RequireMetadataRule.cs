@@ -6,10 +6,10 @@ namespace com.workes.inventory.rules
     public class RequireMetadataRule<TKey> : IRulePolicy<TKey>
     {
         private readonly string _key;
-        private readonly object _value;
+        private readonly object? _value;
         public string Id { get; }
 
-        public RequireMetadataRule(string key, object value)
+        public RequireMetadataRule(string key, object? value)
         {
             _key = key;
             _value = value;
@@ -23,7 +23,7 @@ namespace com.workes.inventory.rules
         {
             foreach (var (_, metadata, _) in transaction.Added)
             {
-                if (metadata == null || !metadata.TryGet<object>(_key, out var val) || !val.Equals(_value))
+                if (metadata == null || !metadata.TryGet<object>(_key, out var val) || !Equals(val, _value))
                 {
                     error = $"Expected item metadata '{_key}' to equal '{_value}'.";
                     return false;

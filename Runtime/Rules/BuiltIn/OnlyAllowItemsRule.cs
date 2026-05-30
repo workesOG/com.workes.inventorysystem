@@ -12,10 +12,16 @@ namespace com.workes.inventory.rules
 
         public OnlyAllowItemsRule(params ItemDefinition<TKey>[] allowed)
         {
-            _allowed = new HashSet<ItemDefinition<TKey>>(allowed);
-            var allowedDescription = allowed == null
-                ? string.Empty
-                : string.Join(", ", allowed.Select(x => x.Id.ToString()));
+            if (allowed == null)
+                throw new ArgumentNullException(nameof(allowed));
+            foreach (var item in allowed)
+            {
+                if (item == null)
+                    throw new ArgumentException("Allowed items cannot contain null.", nameof(allowed));
+            }
+
+            _allowed = new HashSet<ItemDefinition<TKey>>(allowed!);
+            var allowedDescription = string.Join(", ", allowed.Select(x => $"{x!.Id}"));
             Id = $"OnlyAllowItems[{allowedDescription}]";
         }
 
@@ -24,7 +30,7 @@ namespace com.workes.inventory.rules
             NormalizedInventoryTransaction<TKey> transaction,
             out string? error)
         {
-            var allowedDescription = string.Join(", ", _allowed.Select(x => x.Id.ToString()));
+            var allowedDescription = string.Join(", ", _allowed.Select(x => $"{x!.Id}"));
             foreach (var (definition, _, _) in transaction.Added)
             {
                 if (!_allowed.Contains(definition))

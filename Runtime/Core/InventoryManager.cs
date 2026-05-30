@@ -64,7 +64,7 @@ namespace com.workes.inventory.core
 
         private void EnsureFrozen()
         {
-            if (Registry.Frozen)
+            if (!Registry.Frozen)
                 throw new InvalidOperationException("Item registry has not yet been frozen. Inventory creation is not allowed until the registry is frozen.");
         }
     }

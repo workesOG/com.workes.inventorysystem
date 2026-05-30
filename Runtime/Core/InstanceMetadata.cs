@@ -4,7 +4,7 @@ namespace com.workes.inventory.core
 {
     public class InstanceMetadata
     {
-        private Dictionary<string, object> _data;
+        private Dictionary<string, object>? _data;
 
         private Dictionary<string, object> Data =>
             _data ??= new Dictionary<string, object>();
@@ -26,7 +26,7 @@ namespace com.workes.inventory.core
                 return true;
             }
 
-            value = default;
+            value = default!;
             return false;
         }
 
@@ -43,6 +43,9 @@ namespace com.workes.inventory.core
 
         public bool StructuralEquals(InstanceMetadata other)
         {
+            if (other == null)
+                return false;
+
             if (IsEmpty && other.IsEmpty)
                 return true;
 

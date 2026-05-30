@@ -5,7 +5,7 @@ namespace com.workes.inventory.attributes
 {
     public sealed class AttributeContainer
     {
-        private readonly Dictionary<object, object> _values = new();
+        private readonly Dictionary<object, object?> _values = new();
 
         public void Set<T>(AttributeKey<T> key, T value)
         {
@@ -20,11 +20,11 @@ namespace com.workes.inventory.attributes
                 return true;
             }
 
-            value = default;
+            value = default!;
             return false;
         }
 
-        public T GetOrDefault<T>(AttributeKey<T> key, T defaultValue = default)
+        public T GetOrDefault<T>(AttributeKey<T> key, T defaultValue = default!)
         {
             return TryGet(key, out T value) ? value : defaultValue;
         }

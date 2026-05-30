@@ -17,7 +17,7 @@ namespace com.workes.inventory.core
 
         public ItemRegistry<TKey> Registry => _registry;
 
-        public InventoryManager(IStackResolver<TKey> defaultStackResolver, ICapacityPolicy<TKey> defaultCapacityPolicy, IInventoryLayout<TKey> defaultLayout, RuleContainer<TKey> defaultRules = null)
+        public InventoryManager(IStackResolver<TKey> defaultStackResolver, ICapacityPolicy<TKey> defaultCapacityPolicy, IInventoryLayout<TKey> defaultLayout, RuleContainer<TKey>? defaultRules = null)
         {
             DefaultStackResolver = defaultStackResolver;
             DefaultCapacityPolicy = defaultCapacityPolicy;

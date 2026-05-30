@@ -8,9 +8,9 @@ namespace com.workes.inventory.core
     /// </summary>
     public class SerializedItem<TKey>
     {
-        public TKey DefinitionId { get; set; }
+        public TKey DefinitionId { get; set; } = default!;
         public int Amount { get; set; }
-        public Dictionary<string, object> Metadata { get; set; }
+        public Dictionary<string, object> Metadata { get; set; } = new();
     }
 }
 

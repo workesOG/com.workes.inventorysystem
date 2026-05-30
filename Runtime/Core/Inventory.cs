@@ -24,7 +24,7 @@ namespace com.workes.inventory.core
 
         public AttributeContainer Attributes { get; } = new();
 
-        public event EventHandler<InventoryChangedEventArgs<TKey>> Changed;
+        public event EventHandler<InventoryChangedEventArgs<TKey>>? Changed;
 
         public Inventory(
             InventoryManager<TKey> manager,

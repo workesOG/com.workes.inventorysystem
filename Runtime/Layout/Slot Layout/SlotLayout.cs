@@ -116,7 +116,7 @@ namespace com.workes.inventory.layout
                         error = "Merge delta targets a slot that has no item.";
                         return false;
                     }
-                    int itemIndexInSlot = _slotMap[slot].Value;
+                    int itemIndexInSlot = _slotMap[slot]!.Value;
                     if (transaction.AmountDeltas[0].index != itemIndexInSlot)
                     {
                         error = "Merge delta index does not match the item in the slot specified by context.";

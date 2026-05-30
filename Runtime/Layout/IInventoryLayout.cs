@@ -7,7 +7,7 @@ namespace com.workes.inventory.layout
     {
         int GetSlotCount(Inventory<TKey> inventory);
 
-        ItemInstance<TKey> GetAt(Inventory<TKey> inventory, ILayoutContext<TKey> context);
+        ItemInstance<TKey>? GetAt(Inventory<TKey> inventory, ILayoutContext<TKey> context);
 
         int? GetSlotOfItem(ILayoutContext<TKey> context);
 
@@ -29,7 +29,7 @@ namespace com.workes.inventory.layout
 
         ILayoutPersistentData GetPersistentData();
 
-        void RestorePersistentData(ILayoutPersistentData persistentData);
+        void RestorePersistentData(ILayoutPersistentData? persistentData);
 
         /// <summary>Returns a new layout instance with the same state. Used for simulation cloning.</summary>
         IInventoryLayout<TKey> Clone();

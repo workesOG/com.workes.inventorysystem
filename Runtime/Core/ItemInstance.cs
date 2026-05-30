@@ -11,7 +11,7 @@ namespace com.workes.inventory.core
 
         public InstanceMetadata Metadata { get; } = new();
 
-        public ItemInstance(ItemDefinition<TKey> definition, int amount = 1, InstanceMetadata metadata = null)
+        public ItemInstance(ItemDefinition<TKey> definition, int amount = 1, InstanceMetadata? metadata = null)
         {
             if (amount <= 0)
                 throw new ArgumentException("Amount must be greater than zero.");

@@ -50,6 +50,15 @@ namespace com.workes.inventory.rules
             NormalizedInventoryTransaction<TKey> transaction,
             out string? error)
         {
+            return CanApply(inventory, transaction, structuralTransaction: null, out error);
+        }
+
+        public bool CanApply(
+            Inventory<TKey> inventory,
+            NormalizedInventoryTransaction<TKey> transaction,
+            InventoryTransaction<TKey>? structuralTransaction,
+            out string? error)
+        {
             InventoryRuleSnapshot<TKey>? snapshot = null;
 
             // Higher priority first. If equal priority, keep insertion order.
@@ -74,6 +83,28 @@ namespace com.workes.inventory.rules
                 {
                     var ruleName = rule.GetType().Name;
                     var ruleId = rule.Id;
+                    error = string.IsNullOrWhiteSpace(error)
+                        ? $"Rule '{ruleId}' ({ruleName}) rejected the transaction."
+                        : $"Rule '{ruleId}' ({ruleName}) rejected the transaction: {error}";
+                    return false;
+                }
+            }
+
+            if (structuralTransaction != null)
+            {
+                foreach (var entry in _rules.Values
+                             .Where(e => e.Enabled)
+                             .OrderByDescending(e => e.Priority)
+                             .ThenBy(e => e.Sequence))
+                {
+                    if (entry.Rule is not IInventoryStructuralRulePolicy<TKey> structuralRule)
+                        continue;
+
+                    if (structuralRule.CanApply(inventory, structuralTransaction, out error))
+                        continue;
+
+                    var ruleName = entry.Rule.GetType().Name;
+                    var ruleId = entry.Rule.Id;
                     error = string.IsNullOrWhiteSpace(error)
                         ? $"Rule '{ruleId}' ({ruleName}) rejected the transaction."
                         : $"Rule '{ruleId}' ({ruleName}) rejected the transaction: {error}";

@@ -6,7 +6,7 @@ namespace com.workes.inventory.rules
     /// <summary>
     /// Wraps a snapshot-capable rule and overrides its identity.
     /// </summary>
-    public sealed class IdentifiedSnapshotRulePolicy<TKey> : IRulePolicy<TKey>, IInventorySnapshotRulePolicy<TKey>
+    public sealed class IdentifiedSnapshotRulePolicy<TKey> : IRulePolicy<TKey>, IInventorySnapshotRulePolicy<TKey>, IInventoryStructuralRulePolicy<TKey>
     {
         private readonly IInventorySnapshotRulePolicy<TKey> _innerSnapshot;
         private readonly IRulePolicy<TKey> _innerRule;
@@ -39,6 +39,17 @@ namespace com.workes.inventory.rules
         {
             return _innerSnapshot.CanApply(inventory, transaction, snapshot, out error);
         }
+
+        public bool CanApply(
+            Inventory<TKey> inventory,
+            InventoryTransaction<TKey> transaction,
+            out string? error)
+        {
+            if (_innerRule is IInventoryStructuralRulePolicy<TKey> structuralRule)
+                return structuralRule.CanApply(inventory, transaction, out error);
+
+            error = null;
+            return true;
+        }
     }
 }
-

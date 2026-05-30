@@ -6,7 +6,7 @@ namespace com.workes.inventory.rules
     /// <summary>
     /// Wraps a rule and overrides its identity for stable dictionary-key based management.
     /// </summary>
-    public sealed class IdentifiedRulePolicy<TKey> : IRulePolicy<TKey>
+    public sealed class IdentifiedRulePolicy<TKey> : IRulePolicy<TKey>, IInventoryStructuralRulePolicy<TKey>
     {
         private readonly IRulePolicy<TKey> _inner;
 
@@ -27,6 +27,17 @@ namespace com.workes.inventory.rules
         {
             return _inner.CanApply(inventory, transaction, out error);
         }
+
+        public bool CanApply(
+            Inventory<TKey> inventory,
+            InventoryTransaction<TKey> transaction,
+            out string? error)
+        {
+            if (_inner is IInventoryStructuralRulePolicy<TKey> structuralRule)
+                return structuralRule.CanApply(inventory, transaction, out error);
+
+            error = null;
+            return true;
+        }
     }
 }
-

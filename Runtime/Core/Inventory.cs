@@ -398,7 +398,7 @@ namespace com.workes.inventory.core
             var normalized = GenerateNormalizedInventoryTransaction(tx);
             if (!_capacityPolicy.CanApply(this, normalized, out error))
                 return false;
-            if (!_rules.CanApply(this, normalized, out error))
+            if (!_rules.CanApply(this, normalized, tx, out error))
                 return false;
             if (!_layout.CanSatisfyPlacement(this, tx, context, out error))
                 return false;

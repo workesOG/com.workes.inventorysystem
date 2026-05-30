@@ -7,7 +7,7 @@ namespace com.workes.inventory.rules
     /// <summary>
     /// Succeeds when any nested rule succeeds.
     /// </summary>
-    public class OrRule<TKey> : IRulePolicy<TKey>, IInventorySnapshotRulePolicy<TKey>
+    public class OrRule<TKey> : IRulePolicy<TKey>, IInventorySnapshotRulePolicy<TKey>, IInventoryStructuralRulePolicy<TKey>
     {
         private readonly IRulePolicy<TKey>[] _rules;
         public string Id { get; }
@@ -105,6 +105,37 @@ namespace com.workes.inventory.rules
                     continue;
 
                 if (snapshotRule.CanApply(inventory, transaction, snapshot, out var childError))
+                {
+                    error = null;
+                    return true;
+                }
+
+                var ruleName = rule.GetType().Name;
+                failures.Add(string.IsNullOrWhiteSpace(childError)
+                    ? $"'{ruleName}' rejected (no details)."
+                    : $"'{ruleName}' rejected: {childError}");
+            }
+
+            error = "OrRule expected at least one nested rule to allow the transaction, but none did. " +
+                    $"Failures: {string.Join(" ", failures)}";
+            return false;
+        }
+
+        public bool CanApply(
+            Inventory<TKey> inventory,
+            InventoryTransaction<TKey> transaction,
+            out string? error)
+        {
+            var failures = new List<string>(_rules.Length);
+            var normalized = inventory.GenerateNormalizedInventoryTransaction(transaction);
+
+            foreach (var rule in _rules)
+            {
+                bool allowed = rule is IInventoryStructuralRulePolicy<TKey> structuralRule
+                    ? structuralRule.CanApply(inventory, transaction, out var childError)
+                    : rule.CanApply(inventory, normalized, out childError);
+
+                if (allowed)
                 {
                     error = null;
                     return true;

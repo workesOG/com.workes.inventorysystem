@@ -6,7 +6,7 @@ namespace com.workes.inventory.rules
     /// <summary>
     /// Wraps another rule and inverts its result.
     /// </summary>
-    public class NotRule<TKey> : IRulePolicy<TKey>, IInventorySnapshotRulePolicy<TKey>
+    public class NotRule<TKey> : IRulePolicy<TKey>, IInventorySnapshotRulePolicy<TKey>, IInventoryStructuralRulePolicy<TKey>
     {
         private readonly IRulePolicy<TKey> _inner;
         public string Id { get; }
@@ -49,6 +49,25 @@ namespace com.workes.inventory.rules
             var allowed = snapshotInner != null
                 ? snapshotInner.CanApply(inventory, transaction, snapshot, out _)
                 : _inner.CanApply(inventory, transaction, out _);
+
+            if (allowed)
+            {
+                error = $"Expected wrapped rule '{_inner.GetType().Name}' to reject the transaction, but it allowed it.";
+                return false;
+            }
+
+            error = null;
+            return true;
+        }
+
+        public bool CanApply(
+            Inventory<TKey> inventory,
+            InventoryTransaction<TKey> transaction,
+            out string? error)
+        {
+            var allowed = _inner is IInventoryStructuralRulePolicy<TKey> structuralRule
+                ? structuralRule.CanApply(inventory, transaction, out _)
+                : _inner.CanApply(inventory, inventory.GenerateNormalizedInventoryTransaction(transaction), out _);
 
             if (allowed)
             {

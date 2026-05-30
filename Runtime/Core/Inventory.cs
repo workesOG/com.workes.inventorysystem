@@ -622,6 +622,18 @@ namespace com.workes.inventory.core
                 return false;
             }
 
+            if (amount.HasValue && amount.Value <= 0)
+            {
+                error = "Amount must be greater than zero.";
+                return false;
+            }
+
+            if (amount.HasValue && amount.Value > itemFrom.Amount)
+            {
+                error = "Not enough quantity to move.";
+                return false;
+            }
+
             int targetStack = itemTo.Amount;
             int targetMaxStack = _stackResolver.ResolveMaxStackSize(this, itemTo);
 
